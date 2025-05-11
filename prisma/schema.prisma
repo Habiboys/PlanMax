@@ -1,0 +1,288 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                  Int                  @id @default(autoincrement())
+  name                String
+  email               String               @unique
+  passwordHash        String
+  role                String               @default("user")
+  avatar              String?
+  createdAt           DateTime             @default(now()) @map("created_at")
+  level               Int                  @default(1)
+  points              Int                  @default(0)
+  comments            Comment[]
+  notifications       Notification[]
+  projectMembers      ProjectMember[]
+  projectTemplates    ProjectTemplate[]
+  projects            Project[]            @relation("CreatedBy")
+  resourceAllocations ResourceAllocation[]
+  taskHistory         TaskHistory[]        @relation("ChangedBy")
+  assignedTasks       Task[]               @relation("AssignedTo")
+  sentInvitations     TeamInvitation[]     @relation("InvitedBy")
+  receivedInvitations TeamInvitation[]
+  teamMembers         TeamMember[]
+  ownedTeams          Team[]               @relation("OwnedTeams")
+  pointsHistory       UserPointsHistory[]
+
+  @@map("users")
+}
+
+model Project {
+  id          Int             @id @default(autoincrement())
+  name        String
+  description String?
+  startDate   DateTime?       @map("start_date")
+  endDate     DateTime?       @map("end_date")
+  progress    Int             @default(0)
+  status      String          @default("Not Started")
+  createdById Int             @map("created_by")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at")
+  teamId      String?
+  members     ProjectMember[]
+  createdBy   User            @relation("CreatedBy", fields: [createdById], references: [id])
+  team        Team?           @relation(fields: [teamId], references: [id])
+  risks       Risk[]
+  tasks       Task[]
+
+  @@index([createdById], map: "idx_projects_created_by")
+  @@map("projects")
+}
+
+model Task {
+  id                  Int                  @id @default(autoincrement())
+  projectId           Int                  @map("project_id")
+  name                String
+  description         String?
+  startDate           DateTime             @map("start_date")
+  endDate             DateTime             @map("end_date")
+  progress            Int                  @default(0)
+  status              String               @default("Not Started")
+  assigneeId          Int?                 @map("assignee_id")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @default(now()) @updatedAt @map("updated_at")
+  pointsValue         Int                  @default(10) @map("points_value")
+  comments            Comment[]
+  resourceAllocations ResourceAllocation[]
+  dependedOnBy        TaskDependency[]     @relation("DependedOnBy")
+  dependsOn           TaskDependency[]     @relation("DependsOn")
+  history             TaskHistory[]
+  assignee            User?                @relation("AssignedTo", fields: [assigneeId], references: [id])
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pointsHistory       UserPointsHistory[]
+
+  @@index([projectId], map: "idx_tasks_project_id")
+  @@index([assigneeId], map: "idx_tasks_assignee_id")
+  @@map("tasks")
+}
+
+model TaskDependency {
+  id              Int      @id @default(autoincrement())
+  taskId          Int      @map("task_id")
+  dependsOnTaskId Int      @map("depends_on_task_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  dependsOnTask   Task     @relation("DependedOnBy", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+  task            Task     @relation("DependsOn", fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId], name: "unique_dependency")
+  @@index([taskId], map: "idx_task_dependencies_task_id")
+  @@index([dependsOnTaskId], map: "idx_task_dependencies_depends_on_task_id")
+  @@map("task_dependencies")
+}
+
+model ProjectMember {
+  id        Int      @id @default(autoincrement())
+  projectId Int      @map("project_id")
+  userId    Int      @map("user_id")
+  role      String   @default("member")
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId], name: "unique_project_member")
+  @@index([projectId], map: "idx_project_members_project_id")
+  @@index([userId], map: "idx_project_members_user_id")
+  @@map("project_members")
+}
+
+model TaskHistory {
+  id          Int      @id @default(autoincrement())
+  taskId      Int      @map("task_id")
+  field       String
+  oldValue    String?
+  newValue    String?
+  changedById Int      @map("changed_by")
+  changedAt   DateTime @default(now()) @map("changed_at")
+  changedBy   User     @relation("ChangedBy", fields: [changedById], references: [id])
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId], map: "idx_task_history_task_id")
+  @@map("task_history")
+}
+
+model Risk {
+  id          Int      @id @default(autoincrement())
+  projectId   Int      @map("project_id")
+  name        String
+  description String?
+  impact      String
+  probability String
+  mitigation  String?
+  status      String   @default("Identified")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId], map: "idx_risks_project_id")
+  @@map("risks")
+}
+
+model Notification {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  type        String
+  message     String
+  read        Boolean  @default(false)
+  relatedId   Int?     @map("related_id")
+  relatedType String?  @map("related_type")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_notifications_user_id")
+  @@map("notifications")
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  taskId    Int      @map("task_id")
+  userId    Int      @map("user_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([taskId], map: "idx_comments_task_id")
+  @@map("comments")
+}
+
+model ResourceAllocation {
+  id             Int      @id @default(autoincrement())
+  taskId         Int      @map("task_id")
+  userId         Int      @map("user_id")
+  hoursAllocated Decimal  @map("hours_allocated") @db.Decimal(8, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+  task           Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@index([taskId], map: "idx_resource_allocations_task_id")
+  @@index([userId], map: "idx_resource_allocations_user_id")
+  @@map("resource_allocations")
+}
+
+model ProjectTemplate {
+  id          Int            @id @default(autoincrement())
+  name        String
+  description String?
+  createdById Int            @map("created_by")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  createdBy   User           @relation(fields: [createdById], references: [id])
+  tasks       TemplateTask[]
+
+  @@map("project_templates")
+}
+
+model TemplateTask {
+  id           Int                      @id @default(autoincrement())
+  templateId   Int                      @map("template_id")
+  name         String
+  description  String?
+  duration     Int
+  sequence     Int
+  dependedOnBy TemplateTaskDependency[] @relation("TemplateDependedOnBy")
+  dependsOn    TemplateTaskDependency[] @relation("TemplateDependsOn")
+  template     ProjectTemplate          @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@map("template_tasks")
+}
+
+model TemplateTaskDependency {
+  id              Int          @id @default(autoincrement())
+  taskId          Int          @map("task_id")
+  dependsOnTaskId Int          @map("depends_on_task_id")
+  dependsOnTask   TemplateTask @relation("TemplateDependedOnBy", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+  task            TemplateTask @relation("TemplateDependsOn", fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId], name: "unique_template_dependency")
+  @@map("template_task_dependencies")
+}
+
+model Team {
+  id          String           @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  ownerId     Int
+  projects    Project[]
+  invitations TeamInvitation[]
+  members     TeamMember[]
+  owner       User             @relation("OwnedTeams", fields: [ownerId], references: [id])
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id       String   @id @default(cuid())
+  role     String   @default("MEMBER")
+  joinedAt DateTime @default(now())
+  teamId   String
+  userId   Int
+  team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@map("team_members")
+}
+
+model TeamInvitation {
+  id              Int      @id @default(autoincrement())
+  teamId          String   @map("team_id")
+  userId          Int      @map("user_id")
+  invitedByUserId Int      @map("invited_by_user_id")
+  role            String   @default("MEMBER")
+  status          String   @default("PENDING")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  invitedBy       User     @relation("InvitedBy", fields: [invitedByUserId], references: [id])
+  team            Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+  @@index([invitedByUserId])
+  @@map("team_invitations")
+}
+
+model UserPointsHistory {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  points    Int
+  reason    String
+  taskId    Int?     @map("task_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  task      Task?    @relation(fields: [taskId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_user_points_history_user_id")
+  @@map("user_points_history")
+}
