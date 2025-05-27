@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { z } from "zod"
 
 import { db } from "@/lib/db"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { authOptions } from "@/lib/auth"
 import { hashId, verifyHashedId } from '@/lib/utils';
 
 const updateTeamSchema = z.object({
