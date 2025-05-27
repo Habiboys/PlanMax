@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { SendIcon } from "lucide-react"
+import { format } from "date-fns"
+import { SendIcon, CalendarIcon } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
@@ -12,6 +13,10 @@ import { useToast } from "@/hooks/use-toast"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { AppHeader } from "@/components/app-header"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
 
 export default function AiProjectCreator() {
   const router = useRouter()
@@ -20,6 +25,10 @@ export default function AiProjectCreator() {
   const [prompt, setPrompt] = useState("")
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
+  const [startDate, setStartDate] = useState<Date>()
+  const [endDate, setEndDate] = useState<Date>()
+  const [startDateOpen, setStartDateOpen] = useState(false)
+  const [endDateOpen, setEndDateOpen] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,6 +37,24 @@ export default function AiProjectCreator() {
       toast({
         title: "Prompt tidak boleh kosong",
         description: "Masukkan deskripsi project yang ingin dibuat",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!startDate || !endDate) {
+      toast({
+        title: "Tanggal harus diisi",
+        description: "Pilih tanggal mulai dan selesai project",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (endDate < startDate) {
+      toast({
+        title: "Tanggal tidak valid",
+        description: "Tanggal selesai harus setelah tanggal mulai",
         variant: "destructive"
       })
       return
@@ -41,7 +68,11 @@ export default function AiProjectCreator() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ 
+          prompt,
+          startDate: startDate.toISOString().split('T')[0],
+          endDate: endDate.toISOString().split('T')[0]
+        })
       })
       
       const data = await response.json()
@@ -73,7 +104,25 @@ export default function AiProjectCreator() {
 
   const handleReset = () => {
     setPrompt("")
+    setStartDate(undefined)
+    setEndDate(undefined)
     setResult(null)
+  }
+
+  const handleExampleClick = (example: string) => {
+    setPrompt(example)
+    
+    // Jika tanggal sudah dipilih, langsung submit form
+    if (startDate && endDate) {
+      const formEvent = new Event('submit', { cancelable: true })
+      document.querySelector('form')?.dispatchEvent(formEvent)
+    } else {
+      toast({
+        title: "Pilih tanggal",
+        description: "Silakan pilih tanggal mulai dan selesai project terlebih dahulu",
+        variant: "default"
+      })
+    }
   }
 
   const promptExamples = [
@@ -111,6 +160,66 @@ export default function AiProjectCreator() {
                   className="resize-none"
                 />
               </div>
+
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div className="space-y-2">
+                  <Label>Tanggal Mulai Project</Label>
+                  <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !startDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {startDate ? format(startDate, "PPP") : "Pilih tanggal"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={startDate}
+                        onSelect={(date) => {
+                          setStartDate(date)
+                          setStartDateOpen(false)
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Tanggal Selesai Project</Label>
+                  <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !endDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {endDate ? format(endDate, "PPP") : "Pilih tanggal"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={endDate}
+                        onSelect={(date) => {
+                          setEndDate(date)
+                          setEndDateOpen(false)
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
               
               <div className="mt-6 flex flex-col gap-2">
                 <p className="text-sm text-muted-foreground">Contoh prompt:</p>
@@ -120,7 +229,7 @@ export default function AiProjectCreator() {
                       key={i} 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => setPrompt(example)}
+                      onClick={() => handleExampleClick(example)}
                       className="text-xs"
                     >
                       Contoh {i + 1}
@@ -134,7 +243,7 @@ export default function AiProjectCreator() {
               <Button type="button" variant="outline" onClick={handleReset} disabled={loading}>
                 Reset
               </Button>
-              <Button type="submit" disabled={loading || !prompt.trim()}>
+              <Button type="submit" disabled={loading || !prompt.trim() || !startDate || !endDate}>
                 {loading ? (
                   <>
                     <span className="animate-spin mr-2">

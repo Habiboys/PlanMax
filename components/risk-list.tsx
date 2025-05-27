@@ -29,21 +29,26 @@ import { RiskForm } from "@/components/risk-form"
 interface Risk {
   id: number
   name: string
-  description: string
+  description: string | null
   impact: string
   probability: string
-  mitigation: string
+  mitigation: string | null
   status: string
+  projectId: number
+  createdAt: Date
+  updatedAt: Date
 }
 
 interface RiskListProps {
   projectId: number
+  initialRisks?: Risk[]
+  onRiskUpdated?: () => void
 }
 
-export function RiskList({ projectId }: RiskListProps) {
+export function RiskList({ projectId, initialRisks = [], onRiskUpdated }: RiskListProps) {
   const { toast } = useToast()
-  const [risks, setRisks] = useState<Risk[]>([])
-  const [loading, setLoading] = useState(true)
+  const [risks, setRisks] = useState<Risk[]>(initialRisks)
+  const [loading, setLoading] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -62,7 +67,10 @@ export function RiskList({ projectId }: RiskListProps) {
           variant: "destructive",
         })
       } else {
-        setRisks(result.risks)
+        setRisks(result.risks || [])
+        if (onRiskUpdated) {
+          onRiskUpdated()
+        }
       }
     } catch (error) {
       toast({
@@ -77,7 +85,9 @@ export function RiskList({ projectId }: RiskListProps) {
 
   // Memuat data saat komponen dimuat atau refresh dipicu
   useEffect(() => {
-    loadRisks()
+    if (refreshTrigger > 0) {
+      loadRisks()
+    }
   }, [projectId, refreshTrigger])
 
   // Fungsi untuk menangani penghapusan risiko
@@ -167,18 +177,13 @@ export function RiskList({ projectId }: RiskListProps) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5" />
-            Manajemen Risiko Proyek
-          </CardTitle>
-          <CardDescription>
-            Identifikasi dan kelola risiko yang mungkin mempengaruhi proyek Anda
-          </CardDescription>
+          <CardTitle>Risiko Proyek</CardTitle>
+          <CardDescription>Daftar risiko yang teridentifikasi dalam proyek</CardDescription>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="gap-1">
-              <Plus className="h-4 w-4" />
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
               Tambah Risiko
             </Button>
           </DialogTrigger>
@@ -186,17 +191,18 @@ export function RiskList({ projectId }: RiskListProps) {
             <DialogHeader>
               <DialogTitle>Tambah Risiko Baru</DialogTitle>
               <DialogDescription>
-                Tambahkan risiko baru untuk proyek ini
+                Tambahkan risiko baru ke dalam proyek
               </DialogDescription>
             </DialogHeader>
-            <RiskForm 
-              projectId={projectId} 
-              onSuccess={handleFormSubmit} 
-              onCancel={() => setIsAddDialogOpen(false)} 
+            <RiskForm
+              projectId={projectId}
+              onSuccess={handleFormSubmit}
+              onCancel={() => setIsAddDialogOpen(false)}
             />
           </DialogContent>
         </Dialog>
       </CardHeader>
+
       <CardContent>
         {loading ? (
           <div className="flex items-center justify-center h-32">
@@ -256,33 +262,58 @@ export function RiskList({ projectId }: RiskListProps) {
                             <DialogHeader>
                               <DialogTitle>Edit Risiko</DialogTitle>
                               <DialogDescription>
-                                Update informasi risiko ini
+                                Ubah detail risiko yang dipilih
                               </DialogDescription>
                             </DialogHeader>
-                            {selectedRisk && (
-                              <RiskForm 
-                                projectId={projectId} 
-                                risk={selectedRisk}
-                                onSuccess={handleFormSubmit} 
-                                onCancel={() => {
-                                  setIsEditDialogOpen(false)
-                                  setSelectedRisk(null)
-                                }} 
-                              />
-                            )}
+                            <RiskForm
+                              projectId={projectId}
+                              risk={risk}
+                              onSuccess={handleFormSubmit}
+                              onCancel={() => setIsEditDialogOpen(false)}
+                            />
                           </DialogContent>
                         </Dialog>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          onClick={() => {
-                            setSelectedRisk(risk)
-                            setIsDeleteDialogOpen(true)
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                          <span className="sr-only">Delete</span>
-                        </Button>
+
+                        <Dialog open={isDeleteDialogOpen && selectedRisk?.id === risk.id} onOpenChange={(open) => {
+                          setIsDeleteDialogOpen(open)
+                          if (!open) setSelectedRisk(null)
+                        }}>
+                          <DialogTrigger asChild>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                setSelectedRisk(risk)
+                                setIsDeleteDialogOpen(true)
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Hapus Risiko</DialogTitle>
+                              <DialogDescription>
+                                Apakah Anda yakin ingin menghapus risiko ini? Tindakan ini tidak dapat dibatalkan.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                              <Button
+                                variant="outline"
+                                onClick={() => setIsDeleteDialogOpen(false)}
+                              >
+                                Batal
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                onClick={() => handleDelete(risk.id)}
+                              >
+                                Hapus
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -291,35 +322,6 @@ export function RiskList({ projectId }: RiskListProps) {
             </Table>
           </div>
         )}
-
-        {/* Dialog Konfirmasi Hapus */}
-        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Konfirmasi Hapus Risiko</DialogTitle>
-              <DialogDescription>
-                Apakah Anda yakin ingin menghapus risiko ini? Tindakan ini tidak dapat dibatalkan.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setIsDeleteDialogOpen(false)
-                  setSelectedRisk(null)
-                }}
-              >
-                Batal
-              </Button>
-              <Button 
-                variant="destructive" 
-                onClick={() => selectedRisk && handleDelete(selectedRisk.id)}
-              >
-                Hapus
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </CardContent>
     </Card>
   )

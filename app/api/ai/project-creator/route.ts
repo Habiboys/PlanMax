@@ -34,7 +34,7 @@ export async function POST(req: Request) {
 
     // Parse body request
     const body = await req.json()
-    const { prompt } = body
+    const { prompt, startDate, endDate } = body
 
     if (!prompt) {
       return NextResponse.json(
@@ -43,214 +43,59 @@ export async function POST(req: Request) {
       )
     }
 
+    if (!startDate || !endDate) {
+      return NextResponse.json(
+        { error: "Tanggal mulai dan selesai harus diisi" },
+        { status: 400 }
+      )
+    }
+
     // Instruksi untuk model Gemini
-    const systemPrompt = `Kamu adalah asisten AI yang membantu membuat project, task, dan tim berdasarkan deskripsi yang diberikan pengguna. 
+    const systemPrompt = `Kamu adalah asisten AI yang membantu membuat project, task, tim, dan risiko berdasarkan deskripsi yang diberikan pengguna. 
     Tugas kamu adalah mengekstrak detail berikut dari prompt pengguna:
     1. Nama project
     2. Deskripsi project
     3. Tim (jumlah dan role/peran dalam tim)
-    4. Task-task (WAJIB buat minimal 15-20 task detail dengan nama, deskripsi, dan durasi)
+    4. Task-task (WAJIB buat minimal 15-20 task detail dengan nama, deskripsi, durasi, prioritas, tipe, dan estimasi jam)
     5. Tanggal mulai dan target selesai
+    6. Risiko-risiko project (WAJIB buat minimal 5 risiko dengan detail lengkap)
+
+    PENTING: Gunakan tanggal mulai ${startDate} dan tanggal selesai ${endDate} yang sudah ditentukan user untuk membuat timeline task yang sesuai.
+    Pastikan semua task berada dalam rentang tanggal tersebut.
 
     Berikan respons dalam format JSON seperti contoh berikut:
     {
       "project": {
         "name": "Website E-commerce Toko Sepatu",
         "description": "Membuat website e-commerce untuk toko sepatu dengan fitur katalog produk, keranjang belanja, sistem pembayaran online, manajemen inventaris, dan analytics",
-        "startDate": "2023-05-01", 
-        "endDate": "2023-08-30"
+        "startDate": "${startDate}", 
+        "endDate": "${endDate}"
       },
       "team": [
         { "role": "MEMBER", "name": "UI/UX Designer" },
         { "role": "MEMBER", "name": "Frontend Developer" },
-        { "role": "MEMBER", "name": "Backend Developer" },
-        { "role": "MEMBER", "name": "Database Administrator" },
-        { "role": "MEMBER", "name": "QA Tester" },
-        { "role": "MEMBER", "name": "Project Manager" },
-        { "role": "MEMBER", "name": "DevOps Engineer" }
+        { "role": "MEMBER", "name": "Backend Developer" }
       ],
       "tasks": [
         {
           "name": "Analisis Kebutuhan Bisnis",
           "description": "Melakukan wawancara dengan stakeholder untuk menentukan kebutuhan dan fitur utama website e-commerce",
-          "startDate": "2023-05-01",
+          "startDate": "${startDate}",
           "endDate": "2023-05-07",
-          "status": "Not Started"
-        },
+          "status": "Not Started",
+          "priority": "High",
+          "type": "Analysis",
+          "estimatedHours": 20
+        }
+      ],
+      "risks": [
         {
-          "name": "Riset Kompetitor",
-          "description": "Menganalisis website pesaing untuk mengidentifikasi best practices dan peluang diferensiasi",
-          "startDate": "2023-05-05",
-          "endDate": "2023-05-12",
-          "status": "Not Started"
-        },
-        {
-          "name": "Wireframing Halaman Utama",
-          "description": "Membuat wireframe low-fidelity untuk halaman beranda dan navigasi utama",
-          "startDate": "2023-05-10",
-          "endDate": "2023-05-17",
-          "status": "Not Started"
-        },
-        {
-          "name": "Wireframing Halaman Produk",
-          "description": "Membuat wireframe untuk halaman detail produk, kategori, dan pencarian",
-          "startDate": "2023-05-15",
-          "endDate": "2023-05-22",
-          "status": "Not Started"
-        },
-        {
-          "name": "Wireframing Checkout Flow",
-          "description": "Membuat wireframe untuk alur checkout, keranjang belanja, dan pembayaran",
-          "startDate": "2023-05-18",
-          "endDate": "2023-05-25",
-          "status": "Not Started"
-        },
-        {
-          "name": "Design UI Halaman Utama",
-          "description": "Membuat desain visual high-fidelity untuk halaman beranda berdasarkan wireframe",
-          "startDate": "2023-05-23",
-          "endDate": "2023-06-01",
-          "status": "Not Started"
-        },
-        {
-          "name": "Design UI Halaman Produk",
-          "description": "Membuat desain visual untuk halaman produk dan katalog",
-          "startDate": "2023-05-28",
-          "endDate": "2023-06-05",
-          "status": "Not Started"
-        },
-        {
-          "name": "Design UI Checkout & Keranjang",
-          "description": "Membuat desain visual untuk proses checkout dan keranjang belanja",
-          "startDate": "2023-06-01",
-          "endDate": "2023-06-08",
-          "status": "Not Started"
-        },
-        {
-          "name": "Design UI Panel Admin",
-          "description": "Membuat desain visual untuk dashboard admin dan management produk",
-          "startDate": "2023-06-05",
-          "endDate": "2023-06-15",
-          "status": "Not Started"
-        },
-        {
-          "name": "Perancangan Database",
-          "description": "Mendesain skema database untuk produk, pengguna, pesanan, dan inventaris",
-          "startDate": "2023-05-15",
-          "endDate": "2023-05-25",
-          "status": "Not Started"
-        },
-        {
-          "name": "Setup Infrastruktur",
-          "description": "Menyiapkan server, domain, dan lingkungan development",
-          "startDate": "2023-05-20",
-          "endDate": "2023-05-30",
-          "status": "Not Started"
-        },
-        {
-          "name": "Implementasi Frontend - Homepage",
-          "description": "Mengembangkan halaman beranda dan navigasi dengan HTML, CSS dan JavaScript",
-          "startDate": "2023-06-10",
-          "endDate": "2023-06-20",
-          "status": "Not Started"
-        },
-        {
-          "name": "Implementasi Frontend - Katalog Produk",
-          "description": "Mengembangkan halaman katalog dan filter produk",
-          "startDate": "2023-06-15",
-          "endDate": "2023-06-25",
-          "status": "Not Started"
-        },
-        {
-          "name": "Implementasi Frontend - Detail Produk",
-          "description": "Mengembangkan halaman detail produk dengan galeri gambar dan deskripsi",
-          "startDate": "2023-06-20",
-          "endDate": "2023-06-30",
-          "status": "Not Started"
-        },
-        {
-          "name": "Implementasi Frontend - Keranjang & Checkout",
-          "description": "Mengembangkan fitur keranjang belanja dan proses checkout",
-          "startDate": "2023-06-25",
-          "endDate": "2023-07-05",
-          "status": "Not Started"
-        },
-        {
-          "name": "Implementasi Backend - API Produk",
-          "description": "Mengembangkan RESTful API untuk manajemen produk dan kategori",
-          "startDate": "2023-06-01",
-          "endDate": "2023-06-15",
-          "status": "Not Started"
-        },
-        {
-          "name": "Implementasi Backend - API Pengguna",
-          "description": "Mengembangkan sistem autentikasi dan manajemen pengguna",
-          "startDate": "2023-06-10",
-          "endDate": "2023-06-25",
-          "status": "Not Started"
-        },
-        {
-          "name": "Implementasi Backend - API Pesanan",
-          "description": "Mengembangkan sistem pemrosesan pesanan dan pembayaran",
-          "startDate": "2023-06-20",
-          "endDate": "2023-07-05",
-          "status": "Not Started"
-        },
-        {
-          "name": "Implementasi Backend - Admin Panel",
-          "description": "Mengembangkan panel admin untuk manajemen produk dan pesanan",
-          "startDate": "2023-07-01",
-          "endDate": "2023-07-15",
-          "status": "Not Started"
-        },
-        {
-          "name": "Integrasi Payment Gateway",
-          "description": "Mengintegrasikan sistem pembayaran online seperti Midtrans atau Xendit",
-          "startDate": "2023-07-10",
-          "endDate": "2023-07-20",
-          "status": "Not Started"
-        },
-        {
-          "name": "Unit Testing",
-          "description": "Menulis dan menjalankan unit test untuk frontend dan backend",
-          "startDate": "2023-07-15",
-          "endDate": "2023-07-30",
-          "status": "Not Started"
-        },
-        {
-          "name": "Integration Testing",
-          "description": "Pengujian integrasi antar komponen sistem",
-          "startDate": "2023-07-25",
-          "endDate": "2023-08-05",
-          "status": "Not Started"
-        },
-        {
-          "name": "User Acceptance Testing",
-          "description": "Pengujian dengan pengguna akhir untuk memastikan semua fitur berfungsi sesuai kebutuhan",
-          "startDate": "2023-08-01",
-          "endDate": "2023-08-10",
-          "status": "Not Started"
-        },
-        {
-          "name": "Optimasi Performa",
-          "description": "Meningkatkan kecepatan loading dan responsivitas website",
-          "startDate": "2023-08-05",
-          "endDate": "2023-08-15",
-          "status": "Not Started"
-        },
-        {
-          "name": "Deployment ke Production",
-          "description": "Meluncurkan website ke server produksi",
-          "startDate": "2023-08-15",
-          "endDate": "2023-08-20",
-          "status": "Not Started"
-        },
-        {
-          "name": "Monitoring & Bug Fixing",
-          "description": "Memantau kinerja website dan memperbaiki bug yang ditemukan",
-          "startDate": "2023-08-20",
-          "endDate": "2023-08-30",
-          "status": "Not Started"
+          "name": "Keterlambatan Jadwal",
+          "description": "Risiko proyek tidak selesai sesuai dengan timeline yang direncanakan",
+          "impact": "High",
+          "probability": "Medium",
+          "mitigation": "1. Monitoring progress secara rutin\\n2. Identifikasi bottleneck sejak dini\\n3. Alokasi buffer time untuk task-task kritis",
+          "status": "Identified"
         }
       ]
     }
@@ -258,21 +103,24 @@ export async function POST(req: Request) {
     Catatan:
     - Tanggal gunakan format ISO (YYYY-MM-DD)
     - Status task bisa: "Not Started", "In Progress", "Completed"
+    - Priority task bisa: "High", "Medium", "Low"
+    - Type task bisa: "Analysis", "Design", "Development", "Testing", "Documentation", "Research", "Meeting", "Other"
+    - estimatedHours harus realistis (dalam jam kerja)
     - Untuk team member, gunakan nama role/posisi yang sesuai dengan project
     - Role team member bisa: "OWNER", "ADMIN", "MEMBER"
     - WAJIB buat minimal 15-20 task yang mencakup seluruh fase project dari awal hingga selesai
     - Task harus detail, spesifik, dan menyeluruh mencakup semua aspek project
     - Task harus mencakup fase: analisis, perencanaan, desain, pengembangan, pengujian, deployment, dan pemeliharaan
     - Pastikan timeline task realistis dan mempertimbangkan dependensi antar task
+    - SANGAT PENTING: Semua tanggal task HARUS berada di antara ${startDate} dan ${endDate}
 
-    PENTING: Berikan output hanya dalam format JSON yang valid tanpa komentar atau teks tambahan.`;
+    PENTING: Berikan output hanya dalam format JSON yang valid tanpa komentar atau teks tambahan.
+    `;
 
     // Gunakan Gemini untuk menganalisis prompt
-    const result = await model.generateContent({
-      contents: [{
-        parts: [{ text: `${systemPrompt}\n\nPrompt pengguna: ${prompt}\n\nBerikan output JSON:` }]
-      }]
-    });
+    const result = await model.generateContent([
+      `${systemPrompt}\n\nPrompt pengguna: ${prompt}\n\nBerikan output JSON:`
+    ]);
     const response = await result.response;
     const textResult = response.text();
     
@@ -288,9 +136,13 @@ export async function POST(req: Request) {
       if (jsonMatch) {
         try {
           return await processAIResponse(JSON.parse(jsonMatch[0]), user);
-        } catch (extractError) {
+              } catch (extractError) {
+        if (extractError instanceof Error) {
           throw new Error("Gagal memproses respons JSON dari AI: " + extractError.message);
+        } else {
+          throw new Error("Gagal memproses respons JSON dari AI");
         }
+      }
       } else {
         throw new Error("Tidak dapat mengekstrak respons JSON dari AI");
       }
@@ -488,6 +340,69 @@ async function processAIResponse(aiResponse: any, user: any) {
       }
     }
   });
+
+  // Buat risiko-risiko dari AI atau gunakan default jika tidak ada
+  const defaultRisks = [
+    {
+      name: "Keterlambatan Jadwal",
+      description: "Risiko proyek tidak selesai sesuai dengan timeline yang direncanakan",
+      impact: "High",
+      probability: "Medium",
+      mitigation: "1. Monitoring progress secara rutin\n2. Identifikasi bottleneck sejak dini\n3. Alokasi buffer time untuk task-task kritis",
+      status: "Identified",
+      projectId: project.id
+    },
+    {
+      name: "Perubahan Kebutuhan",
+      description: "Perubahan requirement yang signifikan selama proyek berjalan",
+      impact: "Medium",
+      probability: "High",
+      mitigation: "1. Dokumentasi requirement yang detail\n2. Komunikasi rutin dengan stakeholder\n3. Proses change management yang jelas",
+      status: "Identified",
+      projectId: project.id
+    },
+    {
+      name: "Keterbatasan Sumber Daya",
+      description: "Kekurangan sumber daya manusia atau teknis selama proyek",
+      impact: "High",
+      probability: "Medium",
+      mitigation: "1. Perencanaan alokasi sumber daya di awal\n2. Identifikasi skill gap\n3. Training dan knowledge sharing",
+      status: "Identified",
+      projectId: project.id
+    },
+    {
+      name: "Masalah Teknis",
+      description: "Kendala teknis yang dapat menghambat pengembangan",
+      impact: "Medium",
+      probability: "Medium",
+      mitigation: "1. Code review rutin\n2. Testing komprehensif\n3. Dokumentasi teknis yang baik",
+      status: "Identified",
+      projectId: project.id
+    },
+    {
+      name: "Komunikasi Tim",
+      description: "Miscommunication atau lack of communication dalam tim",
+      impact: "Medium",
+      probability: "Low",
+      mitigation: "1. Daily standup meeting\n2. Penggunaan tools kolaborasi\n3. Dokumentasi komunikasi penting",
+      status: "Identified",
+      projectId: project.id
+    }
+  ];
+
+  // Gunakan risiko dari AI jika ada, jika tidak gunakan default
+  const risks = aiResponse.risks && aiResponse.risks.length > 0
+    ? aiResponse.risks.map((risk: any) => ({
+        ...risk,
+        projectId: project.id,
+        status: risk.status || "Identified"
+      }))
+    : defaultRisks;
+
+  // Buat semua risiko
+  await db.risk.createMany({
+    data: risks
+  });
   
   // Buat task-task
   const tasks = [];
@@ -506,7 +421,10 @@ async function processAIResponse(aiResponse: any, user: any) {
           // Hapus field createdById yang tidak ada di model database
           // Jika diperlukan, gunakan assigneeId untuk menentukan user yang ditugaskan untuk task ini
           assigneeId: user.id, // Opsional: Tetapkan creator juga sebagai assignee
-          pointsValue: 10 // Gunakan default nilai points
+          pointsValue: 10, // Gunakan default nilai points
+          priority: taskData.priority || "Medium",
+          type: taskData.type || "Other",
+          estimatedHours: taskData.estimatedHours || 0
         }
       });
       
@@ -536,7 +454,10 @@ async function processAIResponse(aiResponse: any, user: any) {
       status: task.status,
       pointsValue: task.pointsValue,
       assigneeId: task.assigneeId,
-      editable: true   // Menambahkan flag editable untuk UI
+      editable: true,   // Menambahkan flag editable untuk UI
+      priority: task.priority,
+      type: task.type,
+      estimatedHours: task.estimatedHours
     }))
   });
 } 

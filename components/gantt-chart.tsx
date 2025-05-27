@@ -68,6 +68,11 @@ export function GanttChart({ tasks, onTaskUpdated }: GanttChartProps) {
   const [timeScale, setTimeScale] = useState<"day" | "week" | "month">("day")
   const [zoomLevel, setZoomLevel] = useState<number>(1)
 
+  // Urutkan task berdasarkan startDate (dari yang paling awal ke yang terakhir)
+  const sortedTasks = [...tasks].sort((a, b) => {
+    return new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+  })
+
   useEffect(() => {
     if (containerRef.current) {
       setContainerWidth(containerRef.current.offsetWidth)
@@ -106,7 +111,7 @@ export function GanttChart({ tasks, onTaskUpdated }: GanttChartProps) {
   // Fungsi untuk mendapatkan tanggal berdasarkan skala waktu
   const getDateRangeByScale = useCallback(() => {
     // Tanggal-tanggal task setelah normalisasi (tanpa debug logging)
-    const normalizedDates = tasks.map(task => {
+    const normalizedDates = sortedTasks.map(task => {
       const start = parseDateWithoutTime(task.startDate);
       const end = parseDateWithoutTime(task.endDate);
       return { 
@@ -176,7 +181,7 @@ export function GanttChart({ tasks, onTaskUpdated }: GanttChartProps) {
       paddedEnd,
       totalDays: differenceInDays(paddedEnd, paddedStart) + 1
     };
-  }, [tasks, timeScale]);
+  }, [sortedTasks, timeScale]);
 
   const { dateRange, paddedStart, paddedEnd, totalDays } = getDateRangeByScale();
 
@@ -304,7 +309,7 @@ export function GanttChart({ tasks, onTaskUpdated }: GanttChartProps) {
     
     // Posisi vertikal
     // Untuk 1/3 task pertama, tampilkan tooltip di bawah
-    const showBelow = index < tasks.length / 3;
+    const showBelow = index < sortedTasks.length / 3;
     const top = showBelow 
       ? `${index * 40 + 35}px` // di bawah task
       : `${index * 40 - 4}px`; // di atas task (default)
@@ -411,7 +416,7 @@ export function GanttChart({ tasks, onTaskUpdated }: GanttChartProps) {
           {/* Fixed left column for task names */}
           <div className="flex-none w-[160px] bg-background" style={{ position: 'sticky', left: 0, zIndex: 25 }}>
             <div className="border-r h-full">
-              {tasks.map((task) => (
+              {sortedTasks.map((task) => (
                 <div 
                   key={task.id} 
                   className="flex items-center px-2 text-sm h-[40px] border-b border-gray-100"
@@ -435,7 +440,7 @@ export function GanttChart({ tasks, onTaskUpdated }: GanttChartProps) {
             <div style={{ 
               width: '100%',
               position: 'relative',
-              minHeight: `${Math.max(tasks.length * 40, 100)}px`,
+              minHeight: `${Math.max(sortedTasks.length * 40, 100)}px`,
             }}>
               {/* Background grid */}
               <div className="absolute inset-0 grid" style={{ 
@@ -455,7 +460,7 @@ export function GanttChart({ tasks, onTaskUpdated }: GanttChartProps) {
               </div>
               
               {/* Garis horizontal untuk setiap baris task */}
-              {tasks.map((_, index) => (
+              {sortedTasks.map((_, index) => (
                 <div 
                   key={`line-${index}`}
                   className="absolute w-full border-b border-gray-100"
@@ -464,7 +469,7 @@ export function GanttChart({ tasks, onTaskUpdated }: GanttChartProps) {
               ))}
               
               {/* Task bars */}
-              {tasks.map((task, index) => {
+              {sortedTasks.map((task, index) => {
                 const { left, width } = getTaskPosition(task)
                 const colorClass = getTaskColor(task)
                 const isActive = activeTask === task.id
@@ -561,13 +566,13 @@ export function GanttChart({ tasks, onTaskUpdated }: GanttChartProps) {
               })}
 
               {/* Dependency lines */}
-              {tasks.map((task) =>
+              {sortedTasks.map((task) =>
                 task.dependencies?.map((depId) => {
-                  const dependencyTask = tasks.find((t) => t.id === depId)
+                  const dependencyTask = sortedTasks.find((t) => t.id === depId)
                   if (!dependencyTask) return null
 
-                  const depIndex = tasks.findIndex((t) => t.id === depId)
-                  const taskIndex = tasks.findIndex((t) => t.id === task.id)
+                  const depIndex = sortedTasks.findIndex((t) => t.id === depId)
+                  const taskIndex = sortedTasks.findIndex((t) => t.id === task.id)
                   
                   if (depIndex === -1 || taskIndex === -1) return null
                   

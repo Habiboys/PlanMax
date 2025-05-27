@@ -22,6 +22,9 @@ export interface Task {
   endDate: string
   progress: number
   status: string
+  priority: string
+  type: string
+  estimatedHours: number | null
   assigneeId: number
   createdAt: string
   updatedAt: string
@@ -41,13 +44,13 @@ export interface Risk {
   id: number
   projectId: number
   name: string
-  description: string
+  description: string | null
   impact: string
   probability: string
-  mitigation: string
+  mitigation: string | null
   status: string
-  createdAt: string
-  updatedAt: string
+  createdAt: Date | string
+  updatedAt: Date | string
 }
 
 export interface TaskDependency {

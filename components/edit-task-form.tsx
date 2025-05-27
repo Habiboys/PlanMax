@@ -1,115 +1,111 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
-import { format } from "date-fns"
-import { id } from "date-fns/locale"
-import { Calendar, Plus } from "lucide-react"
-import { useForm } from "react-hook-form"
+import { useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import { format } from "date-fns"
 import * as z from "zod"
 
 import { Button } from "@/components/ui/button"
-import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { useToast } from "@/hooks/use-toast"
-import { createTask } from "@/app/actions/task-actions"
+import { Calendar } from "@/components/ui/calendar"
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { CalendarIcon } from "lucide-react"
-import { Checkbox } from "@/components/ui/checkbox"
+import { updateTask } from "@/app/actions/task-actions"
+import { useToast } from "@/hooks/use-toast"
 
-const formSchema = z.object({
+const taskSchema = z.object({
   name: z.string().min(1, "Nama task harus diisi"),
   description: z.string().optional(),
-  startDate: z.date().optional(),
-  endDate: z.date().optional(),
-  assigneeId: z.string().default("unassigned"),
-  dependencies: z.array(z.number()).optional(),
-  priority: z.string().default("Medium"),
-  type: z.string().default("Other"),
+  startDate: z.date(),
+  endDate: z.date(),
+  priority: z.string(),
+  type: z.string(),
   estimatedHours: z.number().min(0).optional(),
+  assigneeId: z.number().nullable(),
 })
 
-interface NewTaskFormProps {
+interface EditTaskFormProps {
   projectId: number
-  teamMembers: Array<{
+  task: {
     id: number
     name: string
-  }>
-  tasks: Array<{
+    description: string
+    startDate: string
+    endDate: string
+    priority: string
+    type: string
+    estimatedHours: number | null
+    assigneeId: number | null
+  }
+  teamMembers: {
     id: number
     name: string
-  }>
-  onTaskCreated?: (action: string, taskName: string) => void
+  }[]
+  onSuccess: () => void
+  onCancel: () => void
 }
 
-export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: NewTaskFormProps) {
+export function EditTaskForm({ projectId, task, teamMembers, onSuccess, onCancel }: EditTaskFormProps) {
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedDependencies, setSelectedDependencies] = useState<number[]>([])
-  
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+
+  const form = useForm<z.infer<typeof taskSchema>>({
+    resolver: zodResolver(taskSchema),
     defaultValues: {
-      name: "",
-      description: "",
-      startDate: new Date(),
-      endDate: new Date(),
-      assigneeId: "unassigned",
-      priority: "Medium",
-      type: "Other",
-      estimatedHours: 0,
+      name: task.name,
+      description: task.description,
+      startDate: new Date(task.startDate),
+      endDate: new Date(task.endDate),
+      priority: task.priority,
+      type: task.type,
+      estimatedHours: task.estimatedHours || undefined,
+      assigneeId: task.assigneeId,
     },
   })
 
-  const handleSubmit = async (values: z.infer<typeof formSchema>) => {
+  async function onSubmit(values: z.infer<typeof taskSchema>) {
     setIsLoading(true)
     try {
-      const result = await createTask(projectId, {
-        ...values,
-        dependencies: selectedDependencies,
-      })
-
-      if (result.success) {
-        if (onTaskCreated) {
-          onTaskCreated("create", values.name)
-        }
-        form.reset()
-        setSelectedDependencies([])
-      } else {
+      const result = await updateTask(projectId, task.id, values)
+      if (result.error) {
         toast({
           title: "Error",
-          description: result.error || "Gagal membuat task. Silakan coba lagi.",
+          description: result.error,
           variant: "destructive",
         })
+      } else {
+        toast({
+          title: "Sukses",
+          description: "Task berhasil diperbarui",
+        })
+        onSuccess()
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Terjadi kesalahan yang tidak terduga. Silakan coba lagi.",
+        description: "Terjadi kesalahan saat memperbarui task",
         variant: "destructive",
       })
     } finally {
@@ -117,19 +113,9 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
     }
   }
 
-  const toggleDependency = (taskId: number) => {
-    setSelectedDependencies(prev => {
-      if (prev.includes(taskId)) {
-        return prev.filter(id => id !== taskId)
-      } else {
-        return [...prev, taskId]
-      }
-    })
-  }
-
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
@@ -143,7 +129,7 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
             </FormItem>
           )}
         />
-        
+
         <FormField
           control={form.control}
           name="description"
@@ -151,13 +137,17 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
             <FormItem>
               <FormLabel>Deskripsi</FormLabel>
               <FormControl>
-                <Textarea placeholder="Jelaskan detail task" {...field} />
+                <Textarea
+                  placeholder="Masukkan deskripsi task"
+                  {...field}
+                  value={field.value || ""}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        
+
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
@@ -169,14 +159,14 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
                   <PopoverTrigger asChild>
                     <FormControl>
                       <Button
-                        variant="outline"
+                        variant={"outline"}
                         className={cn(
                           "w-full pl-3 text-left font-normal",
                           !field.value && "text-muted-foreground"
                         )}
                       >
                         {field.value ? (
-                          format(field.value, "PPP", { locale: id })
+                          format(field.value, "PPP")
                         ) : (
                           <span>Pilih tanggal</span>
                         )}
@@ -185,12 +175,12 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
                     </FormControl>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent
+                    <Calendar
                       mode="single"
                       selected={field.value}
                       onSelect={field.onChange}
                       disabled={(date) =>
-                        date < new Date(new Date().setHours(0, 0, 0, 0))
+                        date < new Date("1900-01-01")
                       }
                       initialFocus
                     />
@@ -200,7 +190,7 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
               </FormItem>
             )}
           />
-          
+
           <FormField
             control={form.control}
             name="endDate"
@@ -211,14 +201,14 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
                   <PopoverTrigger asChild>
                     <FormControl>
                       <Button
-                        variant="outline"
+                        variant={"outline"}
                         className={cn(
                           "w-full pl-3 text-left font-normal",
                           !field.value && "text-muted-foreground"
                         )}
                       >
                         {field.value ? (
-                          format(field.value, "PPP", { locale: id })
+                          format(field.value, "PPP")
                         ) : (
                           <span>Pilih tanggal</span>
                         )}
@@ -227,13 +217,12 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
                     </FormControl>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent
+                    <Calendar
                       mode="single"
                       selected={field.value}
                       onSelect={field.onChange}
                       disabled={(date) =>
-                        date < form.getValues("startDate") ||
-                        date < new Date(new Date().setHours(0, 0, 0, 0))
+                        date < new Date("1900-01-01")
                       }
                       initialFocus
                     />
@@ -244,32 +233,6 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
             )}
           />
         </div>
-
-        <FormField
-          control={form.control}
-          name="assigneeId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Assignee</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih assignee" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {teamMembers.map((member) => (
-                    <SelectItem key={member.id} value={member.id.toString()}>
-                      {member.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
 
         <div className="grid grid-cols-2 gap-4">
           <FormField
@@ -285,9 +248,9 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="High">Tinggi</SelectItem>
-                    <SelectItem value="Medium">Sedang</SelectItem>
                     <SelectItem value="Low">Rendah</SelectItem>
+                    <SelectItem value="Medium">Sedang</SelectItem>
+                    <SelectItem value="High">Tinggi</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -327,12 +290,13 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
             <FormItem>
               <FormLabel>Estimasi Waktu (jam)</FormLabel>
               <FormControl>
-                <Input 
-                  type="number" 
+                <Input
+                  type="number"
                   min="0"
-                  placeholder="Masukkan estimasi waktu dalam jam" 
+                  placeholder="Masukkan estimasi waktu dalam jam"
                   {...field}
-                  onChange={e => field.onChange(Number(e.target.value))}
+                  onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                  value={field.value || ""}
                 />
               </FormControl>
               <FormMessage />
@@ -340,33 +304,44 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
           )}
         />
 
-        {tasks.length > 0 && (
-          <div className="space-y-2">
-            <Label>Dependencies</Label>
-            <div className="space-y-2">
-              {tasks.map((task) => (
-                <div key={task.id} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`task-${task.id}`}
-                    checked={selectedDependencies.includes(task.id)}
-                    onCheckedChange={() => toggleDependency(task.id)}
-                  />
-                  <label
-                    htmlFor={`task-${task.id}`}
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    {task.name}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <FormField
+          control={form.control}
+          name="assigneeId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Assignee</FormLabel>
+              <Select
+                onValueChange={(value) => field.onChange(value ? Number(value) : null)}
+                defaultValue={field.value?.toString() || "unassigned"}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih assignee" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {teamMembers.map((member) => (
+                    <SelectItem key={member.id} value={member.id.toString()}>
+                      {member.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-        <Button type="submit" disabled={isLoading} className="w-full">
-          {isLoading ? "Menyimpan..." : "Simpan"}
-        </Button>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Batal
+          </Button>
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? "Menyimpan..." : "Simpan"}
+          </Button>
+        </div>
       </form>
     </Form>
   )
-}
+} 

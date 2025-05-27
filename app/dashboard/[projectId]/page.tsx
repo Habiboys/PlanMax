@@ -45,50 +45,57 @@ import { useSession } from "next-auth/react"
 import { Task } from "@/types/schema"
 import { adaptTasksForWorkloadHeatmap, adaptTeamMembersForTaskList } from "@/components/adapters/task-adapters"
 
-interface ProjectDetails {
+interface ProjectTask {
   id: number
   name: string
   description: string
+  startDate: string
+  endDate: string
+  progress: number
+  status: string
+  assignee: string | null
+  assigneeId: number | null
+  dependencies: number[]
+  priority: string
+  type: string
+  estimatedHours: number | null
+  pointsValue?: number
+  editable?: boolean
+}
+
+interface ProjectDetails {
+  id: number
+  name: string
+  description: string | null
   startDate: string | null
   endDate: string | null
   progress: number
   status: string
-  team: {
-    id: string | number | null
-    name: string
+  team?: {
+    id: number
     members: {
       id: number
+      name: string
+      role: string
       user: {
         id: number
         name: string
         email: string
-        avatar: string
-      } | null
-      role: string
+        avatar: string | null
+      }
     }[]
   }
-  tasks: {
-    id: number
-    name: string
-    description: string
-    startDate: string
-    endDate: string
-    progress: number
-    status: string
-    assignee: string | null
-    assigneeId: number | null
-    dependencies: number[]
-  }[]
+  tasks: ProjectTask[]
   risks: {
     id: number
     name: string
-    description: string
+    description: string | null
+    status: string
     impact: string
     probability: string
-    mitigation: string
-    status: string
+    mitigation: string | null
   }[]
-  userRole: string
+  userRole?: string
 }
 
 export default function ProjectPage() {
@@ -113,7 +120,64 @@ export default function ProjectPage() {
       if (result.error) {
         setError(result.error)
       } else {
-        setProject(result.project)
+        const projectData = result.project as any;
+        
+        // Transform tasks dengan properti yang diperlukan
+        const tasksWithDefaults = (projectData.tasks || []).map((task: any) => ({
+          id: task.id,
+          name: task.name,
+          description: task.description || "",
+          startDate: task.startDate || new Date().toISOString(),
+          endDate: task.endDate || new Date().toISOString(),
+          progress: task.progress || 0,
+          status: task.status || "Not Started",
+          assignee: task.assignee || null,
+          assigneeId: task.assigneeId || null,
+          dependencies: task.dependencies || [],
+          priority: task.priority || "Medium",
+          type: task.type || "Other",
+          estimatedHours: task.estimatedHours || null,
+          pointsValue: task.pointsValue || 0,
+          editable: true
+        }));
+
+        // Transform project data dengan semua properti yang diperlukan
+        const transformedProject: ProjectDetails = {
+          id: projectData.id,
+          name: projectData.name,
+          description: projectData.description || null,
+          startDate: projectData.startDate || null,
+          endDate: projectData.endDate || null,
+          progress: projectData.progress || 0,
+          status: projectData.status || "Not Started",
+          team: projectData.team ? {
+            id: projectData.team.id,
+            members: projectData.team.members.map((member: any) => ({
+              id: member.id,
+              name: member.user.name,
+              role: member.role,
+              user: {
+                id: member.user.id,
+                name: member.user.name,
+                email: member.user.email,
+                avatar: member.user.avatar || null
+              }
+            }))
+          } : undefined,
+          tasks: tasksWithDefaults,
+          risks: (projectData.risks || []).map((risk: any) => ({
+            id: risk.id,
+            name: risk.name,
+            description: risk.description || null,
+            status: risk.status || "Open",
+            impact: risk.impact || "Low",
+            probability: risk.probability || "Low",
+            mitigation: risk.mitigation || null
+          })),
+          userRole: projectData.userRole || null
+        };
+
+        setProject(transformedProject);
       }
     } catch (error) {
       setError("Failed to load project. Please try again.")
@@ -556,13 +620,13 @@ export default function ProjectPage() {
                   </CardHeader>
                   <CardContent>
                     <TaskList
-                      projectId={project.id}
-                      tasks={project.tasks || []}
-                      teamMembers={adaptTeamMembersForTaskList(project.team?.members || [])}
-                      onTaskUpdated={() => {
-                        // Gunakan forceUpdate untuk memicu pembaruan data
-                        forceUpdate()
-                      }}
+                      projectId={Number(projectId)}
+                      tasks={project.tasks}
+                      teamMembers={project.team?.members.map(member => ({
+                        id: member.id,
+                        name: member.user.name
+                      })) || []}
+                      onTaskUpdated={handleTaskCreated}
                       userRole={userRole}
                     />
                   </CardContent>
@@ -571,7 +635,11 @@ export default function ProjectPage() {
 
               <TabsContent value="risks" className="space-y-4 w-full">
                 {project && (
-                  <RiskList projectId={project.id} />
+                  <RiskList 
+                    projectId={project.id} 
+                    initialRisks={project.risks}
+                    onRiskUpdated={fetchProject}
+                  />
                 )}
               </TabsContent>
 
@@ -596,7 +664,56 @@ export default function ProjectPage() {
               </TabsContent>
 
               <TabsContent value="team" className="space-y-4 w-full">
-                {/* ... existing code ... */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Tim Proyek</CardTitle>
+                    <CardDescription>Anggota tim yang terlibat dalam proyek ini</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {project && project.team && project.team.members ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {project.team.members.map((member) => (
+                            <Card key={member.id} className="flex flex-col">
+                              <CardHeader className="pb-2">
+                                <div className="flex items-center space-x-4">
+                                  <Avatar>
+                                    <AvatarImage src={member.user?.avatar || undefined} />
+                                    <AvatarFallback>{member.user?.name?.charAt(0)?.toUpperCase() || '?'}</AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    <CardTitle className="text-base">{member.user?.name || 'Unnamed Member'}</CardTitle>
+                                    <CardDescription className="text-sm">{member.role}</CardDescription>
+                                  </div>
+                                </div>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="space-y-2">
+                                  <div className="text-sm">
+                                    <span className="text-muted-foreground">Email: </span>
+                                    <span>{member.user?.email}</span>
+                                  </div>
+                                  <div className="text-sm">
+                                    <span className="text-muted-foreground">Tugas Aktif: </span>
+                                    <span>{project.tasks?.filter(task => task.assigneeId === member.user?.id && task.status !== 'COMPLETED').length || 0}</span>
+                                  </div>
+                                  <div className="text-sm">
+                                    <span className="text-muted-foreground">Tugas Selesai: </span>
+                                    <span>{project.tasks?.filter(task => task.assigneeId === member.user?.id && task.status === 'COMPLETED').length || 0}</span>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-6">
+                        <p className="text-muted-foreground">Belum ada anggota tim yang ditambahkan ke proyek ini.</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
             </div>
 

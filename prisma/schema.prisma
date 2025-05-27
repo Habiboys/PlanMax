@@ -58,26 +58,29 @@ model Project {
 }
 
 model Task {
-  id                  Int                  @id @default(autoincrement())
-  projectId           Int                  @map("project_id")
-  name                String
-  description         String?
-  startDate           DateTime             @map("start_date")
-  endDate             DateTime             @map("end_date")
-  progress            Int                  @default(0)
-  status              String               @default("Not Started")
-  assigneeId          Int?                 @map("assignee_id")
-  createdAt           DateTime             @default(now()) @map("created_at")
-  updatedAt           DateTime             @default(now()) @updatedAt @map("updated_at")
-  pointsValue         Int                  @default(10) @map("points_value")
-  comments            Comment[]
+  id            Int      @id @default(autoincrement())
+  projectId     Int      @map("project_id")
+  name          String
+  description   String?
+  startDate     DateTime @map("start_date")
+  endDate       DateTime @map("end_date")
+  progress      Int      @default(0)
+  status        String   @default("Not Started")
+  priority      String   @default("Medium")
+  type          String   @default("Other")
+  estimatedHours Float?  @map("estimated_hours")
+  assigneeId    Int?     @map("assignee_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+  pointsValue   Int      @default(10) @map("points_value")
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee      User?    @relation("AssignedTo", fields: [assigneeId], references: [id])
+  comments      Comment[]
+  history       TaskHistory[]
+  dependsOn     TaskDependency[] @relation("DependsOn")
+  dependedOnBy  TaskDependency[] @relation("DependedOnBy")
   resourceAllocations ResourceAllocation[]
-  dependedOnBy        TaskDependency[]     @relation("DependedOnBy")
-  dependsOn           TaskDependency[]     @relation("DependsOn")
-  history             TaskHistory[]
-  assignee            User?                @relation("AssignedTo", fields: [assigneeId], references: [id])
-  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  pointsHistory       UserPointsHistory[]
+  pointsHistory UserPointsHistory[]
 
   @@index([projectId], map: "idx_tasks_project_id")
   @@index([assigneeId], map: "idx_tasks_assignee_id")

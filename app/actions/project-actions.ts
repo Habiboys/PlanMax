@@ -58,7 +58,7 @@ export async function createProject(data: z.infer<typeof createProjectSchema>) {
         name: validatedData.name,
         description: validatedData.description,
         createdById: user.id,
-        teamId: validatedData.teamId,
+        teamId: validatedData.teamId?.toString(),
         members: {
           create: {
             userId: user.id,
@@ -67,6 +67,60 @@ export async function createProject(data: z.infer<typeof createProjectSchema>) {
         },
       },
     })
+
+    // Buat risiko default untuk proyek baru
+    const defaultRisks = [
+      {
+        name: "Keterlambatan Jadwal",
+        description: "Risiko proyek tidak selesai sesuai dengan timeline yang direncanakan",
+        impact: "High",
+        probability: "Medium",
+        mitigation: "1. Monitoring progress secara rutin\n2. Identifikasi bottleneck sejak dini\n3. Alokasi buffer time untuk task-task kritis",
+        status: "Identified",
+        projectId: project.id
+      },
+      {
+        name: "Perubahan Kebutuhan",
+        description: "Perubahan requirement yang signifikan selama proyek berjalan",
+        impact: "Medium",
+        probability: "High",
+        mitigation: "1. Dokumentasi requirement yang detail\n2. Komunikasi rutin dengan stakeholder\n3. Proses change management yang jelas",
+        status: "Identified",
+        projectId: project.id
+      },
+      {
+        name: "Keterbatasan Sumber Daya",
+        description: "Kekurangan sumber daya manusia atau teknis selama proyek",
+        impact: "High",
+        probability: "Medium",
+        mitigation: "1. Perencanaan alokasi sumber daya di awal\n2. Identifikasi skill gap\n3. Training dan knowledge sharing",
+        status: "Identified",
+        projectId: project.id
+      },
+      {
+        name: "Masalah Teknis",
+        description: "Kendala teknis yang dapat menghambat pengembangan",
+        impact: "Medium",
+        probability: "Medium",
+        mitigation: "1. Code review rutin\n2. Testing komprehensif\n3. Dokumentasi teknis yang baik",
+        status: "Identified",
+        projectId: project.id
+      },
+      {
+        name: "Komunikasi Tim",
+        description: "Miscommunication atau lack of communication dalam tim",
+        impact: "Medium",
+        probability: "Low",
+        mitigation: "1. Daily standup meeting\n2. Penggunaan tools kolaborasi\n3. Dokumentasi komunikasi penting",
+        status: "Identified",
+        projectId: project.id
+      }
+    ];
+
+    // Buat semua risiko default
+    await prisma.risk.createMany({
+      data: defaultRisks
+    });
 
     revalidatePath("/dashboard")
     return { success: true, project }
@@ -336,6 +390,7 @@ export async function getProject(projectId: number) {
             },
           },
         },
+        risks: true,
       },
     })
 

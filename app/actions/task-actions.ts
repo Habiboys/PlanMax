@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
+import { Task, Prisma } from "@prisma/client"
 
 // Schema for task creation/update
 const taskSchema = z.object({
@@ -13,9 +14,26 @@ const taskSchema = z.object({
   startDate: z.string(),
   endDate: z.string(),
   status: z.string().default("Not Started"),
+  priority: z.string().default("Medium"),
+  type: z.string().default("Other"),
+  estimatedHours: z.number().optional().nullable(),
   assigneeId: z.number().optional().nullable(),
   dependencies: z.array(z.number()).optional(),
 })
+
+// Schema for task update
+const taskUpdateSchema = z.object({
+  name: z.string().min(1, "Task name is required").max(255),
+  description: z.string().nullable(),
+  startDate: z.date(),
+  endDate: z.date(),
+  priority: z.string(),
+  type: z.string(),
+  estimatedHours: z.number().nullable(),
+  assigneeId: z.number().nullable(),
+})
+
+type TaskUpdateInput = z.infer<typeof taskUpdateSchema>
 
 // Create a new task
 export async function createTask(projectId: number, formData: FormData) {
@@ -36,76 +54,37 @@ export async function createTask(projectId: number, formData: FormData) {
     assigneeId = Number.parseInt(assigneeIdStr)
   }
 
+  // Parse estimated hours
+  const estimatedHoursStr = formData.get("estimatedHours") as string
+  let estimatedHours: number | null = null
+  if (estimatedHoursStr) {
+    estimatedHours = Number.parseFloat(estimatedHoursStr)
+  }
+
   const validatedFields = taskSchema.parse({
     name: formData.get("name"),
     description: formData.get("description"),
     startDate: formData.get("startDate"),
     endDate: formData.get("endDate"),
     status: formData.get("status") || "Not Started",
+    priority: formData.get("priority") || "Medium",
+    type: formData.get("type") || "Other",
+    estimatedHours,
     assigneeId,
     dependencies,
   })
 
   try {
-    // Check if user has permission to add tasks to this project
+    // Check if user has permission to create tasks in this project
     const projectMember = await prisma.projectMember.findFirst({
       where: {
         projectId: projectId,
         userId: Number.parseInt(session.user.id),
-        role: { in: ["OWNER", "ADMIN"] },
       },
     })
 
     if (!projectMember) {
-      throw new Error("You don't have permission to add tasks to this project")
-    }
-
-    // Dapatkan informasi proyek termasuk teamId
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { teamId: true }
-    });
-
-    if (!project) {
-      throw new Error("Proyek tidak ditemukan");
-    }
-
-    // Validasi assignee
-    if (validatedFields.assigneeId) {
-      // Periksa apakah user ada
-      const assigneeExists = await prisma.user.findUnique({
-        where: { id: validatedFields.assigneeId }
-      });
-      
-      if (!assigneeExists) {
-        throw new Error('Assignee tidak valid');
-      }
-      
-      // Jika proyek memiliki tim, periksa apakah assignee adalah anggota tim
-      if (project.teamId) {
-        const isTeamMember = await prisma.teamMember.findFirst({
-          where: {
-            teamId: project.teamId,
-            userId: validatedFields.assigneeId
-          }
-        });
-        
-        if (!isTeamMember) {
-          throw new Error('Assignee bukan anggota tim proyek ini');
-        }
-      } else {
-        // Jika tidak ada tim, periksa apakah assignee adalah anggota proyek
-        const isProjectMember = await prisma.projectMember.findFirst({
-          where: {
-            projectId: projectId,
-            userId: validatedFields.assigneeId
-          }
-        });
-        
-        if (!isProjectMember) {
-          throw new Error('Assignee bukan anggota proyek ini');
-        }
-      }
+      throw new Error("You don't have permission to create tasks in this project")
     }
 
     // Create the task
@@ -117,6 +96,9 @@ export async function createTask(projectId: number, formData: FormData) {
         startDate: new Date(validatedFields.startDate),
         endDate: new Date(validatedFields.endDate),
         status: validatedFields.status,
+        priority: validatedFields.priority,
+        type: validatedFields.type,
+        estimatedHours: validatedFields.estimatedHours,
         progress: validatedFields.status === "Completed" ? 100 : 0,
         assigneeId: validatedFields.assigneeId,
       },
@@ -167,216 +149,194 @@ export async function createTask(projectId: number, formData: FormData) {
   }
 }
 
-// Update an existing task
-export async function updateTask(projectId: number, taskId: number, formData: FormData) {
-  const session = await getServerSession(authOptions)
-
-  if (!session?.user?.id) {
-    throw new Error("You must be logged in to update a task")
-  }
-
-  // Parse dependencies from form data
-  const dependenciesStr = formData.get("dependencies") as string
-  const dependencies = dependenciesStr ? JSON.parse(dependenciesStr) : []
-
-  // Parse assignee ID
-  const assigneeIdStr = formData.get("assigneeId") as string
-  const assigneeId = assigneeIdStr && assigneeIdStr !== "null" ? Number.parseInt(assigneeIdStr) : null
-
-  const validatedFields = taskSchema.parse({
-    name: formData.get("name"),
-    description: formData.get("description"),
-    startDate: formData.get("startDate"),
-    endDate: formData.get("endDate"),
-    status: formData.get("status") || "Not Started",
-    assigneeId,
-    dependencies,
-  })
-
+// Update task
+export async function updateTask(projectId: number, taskId: number, data: TaskUpdateInput) {
   try {
-    // Check if user has permission to update tasks in this project
-    const projectMember = prisma.projectMember.findFirst({
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return { error: "Anda harus login terlebih dahulu" }
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    })
+
+    if (!user) {
+      return { error: "User tidak ditemukan" }
+    }
+
+    // Periksa apakah user memiliki akses ke proyek
+    const projectMember = await prisma.projectMember.findFirst({
       where: {
         projectId: projectId,
-        userId: Number.parseInt(session.user.id),
+        userId: user.id,
       },
     })
 
     if (!projectMember) {
-      throw new Error("You don't have permission to update tasks in this project")
+      return { error: "Anda tidak memiliki akses ke proyek ini" }
     }
 
-    // Get the current task to track changes
-    const currentTask = prisma.task.findUnique({
+    // Validasi data menggunakan Zod
+    const validatedData = taskUpdateSchema.parse(data)
+
+    // Dapatkan task saat ini untuk melacak perubahan
+    const currentTask = await prisma.task.findUnique({
       where: { id: taskId },
-      include: {
-        dependsOn: true,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        startDate: true,
+        endDate: true,
+        priority: true,
+        type: true,
+        estimatedHours: true,
+        assigneeId: true,
       },
     })
 
     if (!currentTask) {
-      throw new Error("Task not found")
+      return { error: "Task tidak ditemukan" }
     }
 
-    // Update the task
-    const task = prisma.task.update({
+    // Update task dengan data yang sudah divalidasi
+    const updatedTask = await prisma.task.update({
       where: { id: taskId },
       data: {
-        name: validatedFields.name,
-        description: validatedFields.description || "",
-        startDate: new Date(validatedFields.startDate),
-        endDate: new Date(validatedFields.endDate),
-        status: validatedFields.status,
-        progress:
-          validatedFields.status === "Completed"
-            ? 100
-            : validatedFields.status === "In Progress"
-              ? 50
-              : validatedFields.status === "Not Started"
-                ? 0
-                : currentTask.progress,
-        assigneeId: validatedFields.assigneeId,
+        name: validatedData.name,
+        description: validatedData.description || "",
+        startDate: validatedData.startDate,
+        endDate: validatedData.endDate,
+        priority: validatedData.priority,
+        type: validatedData.type,
+        estimatedHours: validatedData.estimatedHours,
+        assigneeId: validatedData.assigneeId,
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        startDate: true,
+        endDate: true,
+        priority: true,
+        type: true,
+        estimatedHours: true,
+        assigneeId: true,
       },
     })
 
-    // Track changes for history
+    // Buat task history entries untuk setiap perubahan
     const historyEntries = []
 
-    if (currentTask.name !== validatedFields.name) {
+    if (currentTask.name !== validatedData.name) {
       historyEntries.push({
         taskId: taskId,
         field: "name",
         oldValue: currentTask.name,
-        newValue: validatedFields.name,
-        changedById: Number.parseInt(session.user.id),
+        newValue: validatedData.name,
+        changedById: user.id,
       })
     }
 
-    if (currentTask.description !== validatedFields.description) {
+    if (currentTask.description !== validatedData.description) {
       historyEntries.push({
         taskId: taskId,
         field: "description",
         oldValue: currentTask.description || "",
-        newValue: validatedFields.description || "",
-        changedById: Number.parseInt(session.user.id),
+        newValue: validatedData.description || "",
+        changedById: user.id,
       })
     }
 
-    if (currentTask.startDate.toISOString() !== new Date(validatedFields.startDate).toISOString()) {
+    if (currentTask.startDate.toISOString() !== validatedData.startDate.toISOString()) {
       historyEntries.push({
         taskId: taskId,
         field: "startDate",
         oldValue: currentTask.startDate.toISOString(),
-        newValue: new Date(validatedFields.startDate).toISOString(),
-        changedById: Number.parseInt(session.user.id),
+        newValue: validatedData.startDate.toISOString(),
+        changedById: user.id,
       })
     }
 
-    if (currentTask.endDate.toISOString() !== new Date(validatedFields.endDate).toISOString()) {
+    if (currentTask.endDate.toISOString() !== validatedData.endDate.toISOString()) {
       historyEntries.push({
         taskId: taskId,
         field: "endDate",
         oldValue: currentTask.endDate.toISOString(),
-        newValue: new Date(validatedFields.endDate).toISOString(),
-        changedById: Number.parseInt(session.user.id),
+        newValue: validatedData.endDate.toISOString(),
+        changedById: user.id,
       })
     }
 
-    if (currentTask.status !== validatedFields.status) {
+    if (currentTask.priority !== validatedData.priority) {
       historyEntries.push({
         taskId: taskId,
-        field: "status",
-        oldValue: currentTask.status,
-        newValue: validatedFields.status,
-        changedById: Number.parseInt(session.user.id),
+        field: "priority",
+        oldValue: currentTask.priority,
+        newValue: validatedData.priority,
+        changedById: user.id,
       })
     }
 
-    if (currentTask.assigneeId !== validatedFields.assigneeId) {
+    if (currentTask.type !== validatedData.type) {
+      historyEntries.push({
+        taskId: taskId,
+        field: "type",
+        oldValue: currentTask.type,
+        newValue: validatedData.type,
+        changedById: user.id,
+      })
+    }
+
+    if (currentTask.estimatedHours !== validatedData.estimatedHours) {
+      historyEntries.push({
+        taskId: taskId,
+        field: "estimatedHours",
+        oldValue: currentTask.estimatedHours?.toString() || "None",
+        newValue: validatedData.estimatedHours?.toString() || "None",
+        changedById: user.id,
+      })
+    }
+
+    if (currentTask.assigneeId !== validatedData.assigneeId) {
       historyEntries.push({
         taskId: taskId,
         field: "assignee",
         oldValue: currentTask.assigneeId?.toString() || "None",
-        newValue: validatedFields.assigneeId?.toString() || "None",
-        changedById: Number.parseInt(session.user.id),
+        newValue: validatedData.assigneeId?.toString() || "None",
+        changedById: user.id,
       })
 
-      // If task is newly assigned, create a notification for the assignee
-      if (validatedFields.assigneeId && validatedFields.assigneeId !== currentTask.assigneeId) {
+      // Jika task diassign ke user baru, buat notifikasi
+      if (validatedData.assigneeId) {
         await prisma.notification.create({
           data: {
-            userId: validatedFields.assigneeId,
+            userId: validatedData.assigneeId,
             type: "task_assignment",
-            message: `Anda telah ditugaskan untuk mengerjakan task "${validatedFields.name}" dalam project ini. Silakan periksa detail task untuk informasi lebih lanjut.`,
-            relatedId: task.id,
+            message: `Anda telah ditugaskan untuk mengerjakan task "${validatedData.name}" dalam project ini.`,
+            relatedId: taskId,
             relatedType: "task",
           },
         })
       }
     }
 
-    // Create history entries
+    // Buat history entries jika ada perubahan
     if (historyEntries.length > 0) {
       await prisma.taskHistory.createMany({
         data: historyEntries,
       })
     }
 
-    // Update dependencies
-    // First, get current dependencies
-    const currentDependencies = currentTask.dependsOn.map((dep) => dep.dependsOnTaskId)
-
-    // Find dependencies to add and remove
-    const dependenciesToAdd =
-      validatedFields.dependencies?.filter((depId) => !currentDependencies.includes(depId)) || []
-
-    const dependenciesToRemove = currentDependencies.filter((depId) => !validatedFields.dependencies?.includes(depId))
-
-    // Remove old dependencies
-    if (dependenciesToRemove.length > 0) {
-      await prisma.taskDependency.deleteMany({
-        where: {
-          taskId: taskId,
-          dependsOnTaskId: { in: dependenciesToRemove },
-        },
-      })
-    }
-
-    // Add new dependencies
-    if (dependenciesToAdd.length > 0) {
-      const dependencyPromises = dependenciesToAdd.map((depId) =>
-        prisma.taskDependency.create({
-          data: {
-            taskId: taskId,
-            dependsOnTaskId: depId,
-          },
-        }),
-      )
-
-      await Promise.all(dependencyPromises)
-
-      // Track dependency changes
-      historyEntries.push({
-        taskId: taskId,
-        field: "dependencies",
-        oldValue: JSON.stringify(currentDependencies),
-        newValue: JSON.stringify(validatedFields.dependencies),
-        changedById: Number.parseInt(session.user.id),
-      })
-
-      await prisma.taskHistory.create({
-        data: historyEntries[historyEntries.length - 1],
-      })
-    }
-
-    // Update project progress
-    await updateProjectProgress(projectId)
-
     revalidatePath(`/dashboard/${projectId}`)
-    return { success: true, taskId: task.id }
+    return { success: true, task: updatedTask }
   } catch (error) {
-    console.error("Failed to update task:", error)
-    return { success: false, error: "Failed to update task. Please try again." }
+    if (error instanceof z.ZodError) {
+      return { error: "Data task tidak valid: " + error.errors.map(e => e.message).join(", ") }
+    }
+    console.error("Error updating task:", error)
+    return { error: "Terjadi kesalahan saat memperbarui task" }
   }
 }
 

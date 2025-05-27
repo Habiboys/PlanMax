@@ -59,6 +59,10 @@ interface Task {
   assigneeId: number | null
   dependencies: number[]
   pointsValue?: number
+  priority: string
+  type: string
+  estimatedHours: number | null
+  editable?: boolean
 }
 
 export interface TeamMember {
@@ -135,6 +139,11 @@ export function TaskList({ projectId, tasks, teamMembers, onTaskUpdated, userRol
   // State untuk pagination
   const [currentPage, setCurrentPage] = useState(1)
   const [tasksPerPage, setTasksPerPage] = useState(5)
+
+  // Urutkan task berdasarkan startDate
+  const sortedTasks = [...tasks].sort((a, b) => {
+    return new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+  })
 
   // Debug log untuk teamMembers
   console.log("TaskList - Team Members:", teamMembers);
@@ -435,186 +444,124 @@ export function TaskList({ projectId, tasks, teamMembers, onTaskUpdated, userRol
   // Logika untuk pagination
   const indexOfLastTask = currentPage * tasksPerPage
   const indexOfFirstTask = indexOfLastTask - tasksPerPage
-  const currentTasks = tasks.slice(indexOfFirstTask, indexOfLastTask)
-  const totalPages = Math.ceil(tasks.length / tasksPerPage)
+  const currentTasks = sortedTasks.slice(indexOfFirstTask, indexOfLastTask)
+  const totalPages = Math.ceil(sortedTasks.length / tasksPerPage)
   
   // Function untuk mengubah halaman
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber)
 
+  const handleTaskCreated = (action: string, taskName: string) => {
+    onTaskUpdated()
+    setIsAddingTask(false)
+    toast({
+      title: "Task berhasil dibuat",
+      description: `Task "${taskName}" telah berhasil dibuat.`,
+    })
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold"></h2>
-        <div className="flex gap-2">
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2">
           <Button
-            size="sm"
             variant="outline"
+            size="sm"
             onClick={handleRefreshTasks}
             disabled={isRefreshing}
           >
-            <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
+            <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
+            {isRefreshing ? "Memperbarui..." : "Perbarui"}
           </Button>
-          {canManageTasks && (
-            <Button size="sm" onClick={() => setIsAddingTask(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Task Baru
-            </Button>
-          )}
+          <span className="text-sm text-muted-foreground">
+            Terakhir diperbarui: {formatDistanceToNow(new Date(lastUpdate), { addSuffix: true, locale: id })}
+          </span>
         </div>
+        
+        <Dialog open={isAddingTask} onOpenChange={setIsAddingTask}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Tambah Task
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Tambah Task Baru</DialogTitle>
+              <DialogDescription>
+                Tambahkan task baru ke dalam project. Isi semua informasi yang diperlukan.
+              </DialogDescription>
+            </DialogHeader>
+            <NewTaskForm 
+              projectId={projectId} 
+              teamMembers={teamMembers} 
+              tasks={tasks}
+              onTaskCreated={handleTaskCreated}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {tasks.length === 0 ? (
-        <div className="p-8 text-center">
-          <p className="text-muted-foreground">Belum ada task untuk project ini.</p>
-          {canManageTasks && (
-            <Button className="mt-4" onClick={() => setIsAddingTask(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Buat Task Pertama
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {currentTasks.map((task) => (
-            <TaskCard
-              key={task.id}
-              projectId={projectId}
-              task={{
-                ...task,
-                editable: true
-              }}
-              tasks={tasks}
-              onTaskUpdated={onTaskUpdated}
-              onTaskDeleted={() => {
-                // Hapus task dari state
-                if (onTaskUpdated) {
-                  onTaskUpdated()
-                }
-              }}
-              onPointsEarned={({points, levelUp, newLevel}) => {
-                setPointsEarnedDialog({
-                  open: true,
-                  points,
-                  levelUp,
-                  newLevel
-                })
-              }}
-              onOpenComments={handleOpenCommentsDialog}
-              commentCount={commentCounts[task.id] || 0}
-              teamMembers={teamMembers}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Pagination Controls */}
-      {tasks.length > tasksPerPage && (
-        <div className="mt-4">
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious 
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                />
-              </PaginationItem>
-              
-              {/* Render halaman nomor pagination */}
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter(page => {
-                  // Selalu tampilkan halaman pertama, halaman saat ini, dan halaman terakhir
-                  // Serta halaman yang berdekatan dengan halaman saat ini
-                  return (
-                    page === 1 || 
-                    page === totalPages || 
-                    Math.abs(page - currentPage) <= 1
-                  )
-                })
-                .map((page, i, filteredPages) => {
-                  // Tambahkan ellipsis jika ada gap dalam halaman
-                  const prevPage = filteredPages[i - 1]
-                  const needsEllipsisBefore = prevPage && page - prevPage > 1
-                  
-                  return (
-                    <React.Fragment key={page}>
-                      {needsEllipsisBefore && (
-                        <PaginationItem>
-                          <PaginationEllipsis />
-                        </PaginationItem>
-                      )}
-                      <PaginationItem>
-                        <PaginationLink
-                          isActive={page === currentPage}
-                          onClick={() => paginate(page)}
-                        >
-                          {page}
-                        </PaginationLink>
-                      </PaginationItem>
-                    </React.Fragment>
-                  )
-                })
-              }
-              
-              <PaginationItem>
-                <PaginationNext 
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-          
-          <div className="flex justify-end mt-2 text-sm text-muted-foreground">
-            <select
-              className="border rounded px-2 py-1 text-xs"
-              value={tasksPerPage}
-              onChange={(e) => {
-                setTasksPerPage(Number(e.target.value))
-                setCurrentPage(1) // Reset ke halaman pertama
-              }}
-            >
-              <option value={5}>5 per halaman</option>
-              <option value={10}>10 per halaman</option>
-              <option value={15}>15 per halaman</option>
-              <option value={20}>20 per halaman</option>
-            </select>
-          </div>
-        </div>
-      )}
-
-      {/* Dialog untuk menambah task */}
-      <Dialog open={isAddingTask} onOpenChange={setIsAddingTask}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Tambah Task Baru</DialogTitle>
-            <DialogDescription>
-              Tambahkan task baru ke project ini.
-            </DialogDescription>
-          </DialogHeader>
-          <NewTaskForm 
-            projectId={projectId} 
-            teamMembers={teamMembers} 
+      <div className="grid gap-4">
+        {currentTasks.map((task: Task) => (
+          <TaskCard
+            key={task.id}
+            projectId={projectId}
+            task={task}
             tasks={tasks}
-            onTaskCreated={(action, taskName) => {
-              setIsAddingTask(false);
-              // Refresh data
-              if (onTaskUpdated) {
-                onTaskUpdated();
-              }
-              
-              if (action === "created") {
-                toast({
-                  title: "Task berhasil dibuat",
-                  description: `Task "${taskName}" telah berhasil dibuat.`
-                });
-              }
+            onTaskUpdated={onTaskUpdated}
+            onTaskDeleted={() => {
+              onTaskUpdated()
+              toast({
+                title: "Task dihapus",
+                description: "Task berhasil dihapus dari project.",
+              })
             }}
+            onPointsEarned={({ points, levelUp, newLevel }) => {
+              setPointsEarnedDialog({
+                open: true,
+                points,
+                levelUp,
+                newLevel
+              })
+            }}
+            projectMembers={teamMembers}
+            onOpenComments={handleOpenCommentsDialog}
+            commentCount={commentCounts[task.id] || 0}
           />
-        </DialogContent>
-      </Dialog>
+        ))}
+      </div>
+
+      {/* Pagination */}
+      {sortedTasks.length > tasksPerPage && (
+        <Pagination className="mt-4">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                onClick={() => paginate(currentPage - 1)}
+                disabled={currentPage === 1}
+              />
+            </PaginationItem>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((number) => (
+              <PaginationItem key={number}>
+                <PaginationLink
+                  onClick={() => paginate(number)}
+                  isActive={currentPage === number}
+                >
+                  {number}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            
+            <PaginationItem>
+              <PaginationNext
+                onClick={() => paginate(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
 
       {/* Dialog konfirmasi hapus task */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

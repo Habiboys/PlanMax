@@ -21,6 +21,24 @@ import { updateTaskProgress, deleteTask, updateTaskDates, updateTaskAssignee } f
 import { addTaskCompletionPoints } from "@/app/actions/points-actions"
 import { getTaskComments } from "@/app/actions/comment-actions"
 import { useToast } from "@/hooks/use-toast"
+import { EditTaskForm } from "@/components/edit-task-form"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface TaskCardProps {
   projectId: number
@@ -36,6 +54,9 @@ interface TaskCardProps {
     assigneeId: number | null
     dependencies: number[]
     pointsValue?: number
+    priority: string
+    type: string
+    estimatedHours: number | null
     editable?: boolean
   }
   tasks: any[]
@@ -62,6 +83,8 @@ export function TaskCard({
 }: TaskCardProps) {
   const { toast } = useToast()
   const [editing, setEditing] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [progress, setProgress] = useState(task.progress)
   const [isUpdating, setIsUpdating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -162,8 +185,6 @@ export function TaskCard({
   }
 
   const handleDeleteTask = async () => {
-    if (!confirm("Apakah Anda yakin ingin menghapus task ini?")) return
-    
     setIsDeleting(true)
     try {
       const result = await deleteTask(projectId, task.id)
@@ -174,6 +195,7 @@ export function TaskCard({
           title: "Task dihapus",
           description: "Task berhasil dihapus.",
         })
+        setIsDeleteDialogOpen(false)
       } else {
         toast({
           title: "Error",
@@ -259,67 +281,47 @@ export function TaskCard({
       onOpenChange={setCommentsOpen}
     >
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-wrap">
-            {getStatusIcon(task.status)}
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
             <h3 className="font-medium">{task.name}</h3>
-            <Badge variant="outline" className="ml-2">
-              {task.status}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Clock className="h-4 w-4" />
+              <span>
+                {format(parseISO(task.startDate), "d MMM")} - {format(parseISO(task.endDate), "d MMM yyyy")}
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Badge 
+              variant={task.priority === "High" ? "destructive" : task.priority === "Medium" ? "default" : "secondary"}
+            >
+              {task.priority}
             </Badge>
-            {task.pointsValue && (
-              <Badge variant="secondary" className="ml-1">
-                <Award className="h-3 w-3 mr-1" />
-                {task.pointsValue} poin
+            <Badge variant="outline">{task.type}</Badge>
+            {task.estimatedHours && (
+              <Badge variant="outline" className="ml-2">
+                {task.estimatedHours} jam
               </Badge>
             )}
-            <TaskBlockerIndicator
-              taskId={task.id}
-              name={task.name}
-              description={task.description}
-              comments={comments}
-            />
-            <TaskTimelinePrediction 
-              task={{
-                id: task.id,
-                name: task.name,
-                description: task.description,
-                startDate: task.startDate,
-                endDate: task.endDate,
-                status: task.status,
-                dependencies: task.dependencies
-              }}
-              onUpdateTaskDates={handleUpdateTaskDates}
-            />
-          </div>
-          <div className="flex items-center gap-1">
-            <CollapsibleTrigger asChild>
-              <Button 
-                variant={commentsOpen ? "secondary" : "ghost"} 
-                size="sm" 
-                className="flex items-center gap-1 px-2"
-              >
-                <MessageSquare className="h-4 w-4" />
-                {!isLoadingComments && commentCount > 0 && <span className="text-xs">{commentCount}</span>}
-                <span className="sr-only">Tampilkan komentar</span>
-              </Button>
-            </CollapsibleTrigger>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <Button variant="ghost" size="sm">
                   <MoreHorizontal className="h-4 w-4" />
-                  <span className="sr-only">Open menu</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() => setEditing(!editing)}
-                >
+                <DropdownMenuItem onClick={() => setIsEditDialogOpen(true)}>
                   <Pencil className="mr-2 h-4 w-4" />
+                  Edit Task
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setEditing(!editing)}>
+                  <Award className="mr-2 h-4 w-4" />
                   Update Progress
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleDeleteTask} disabled={isDeleting}>
+                <DropdownMenuItem onClick={() => setIsDeleteDialogOpen(true)} className="text-destructive">
                   <Trash className="mr-2 h-4 w-4" />
-                  {isDeleting ? "Menghapus..." : "Hapus Task"}
+                  Hapus Task
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -378,6 +380,44 @@ export function TaskCard({
               {formatDate(task.startDate)} - {formatDate(task.endDate)}
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {getStatusIcon(task.status)}
+          <span className="text-sm font-medium">{task.status}</span>
+          
+          <TaskBlockerIndicator
+            taskId={task.id}
+            name={task.name}
+            description={task.description}
+            comments={comments}
+          />
+          
+          <TaskTimelinePrediction
+            task={{
+              id: task.id,
+              name: task.name,
+              description: task.description,
+              startDate: task.startDate,
+              endDate: task.endDate,
+              status: task.status,
+              estimatedHours: task.estimatedHours || undefined,
+              dependencies: task.dependencies,
+              team_size: "small"
+            }}
+            historicalTasks={tasks.map(t => ({
+              id: t.id,
+              name: t.name,
+              description: t.description,
+              startDate: t.startDate,
+              endDate: t.endDate,
+              status: t.status,
+              estimatedHours: t.estimatedHours || undefined,
+              dependencies: t.dependencies,
+              team_size: "small"
+            }))}
+            onUpdateTaskDates={handleUpdateTaskDates}
+          />
         </div>
 
         <div>
@@ -486,6 +526,67 @@ export function TaskCard({
       <CollapsibleContent>
         <TaskComments taskId={task.id} projectId={projectId} />
       </CollapsibleContent>
+
+      {/* Edit Task Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Task</DialogTitle>
+            <DialogDescription>
+              Edit informasi task. Perubahan akan langsung tersimpan.
+            </DialogDescription>
+          </DialogHeader>
+          <EditTaskForm
+            projectId={projectId}
+            task={task}
+            teamMembers={teamMembers}
+            onSuccess={() => {
+              setIsEditDialogOpen(false)
+              onTaskUpdated()
+            }}
+            onCancel={() => setIsEditDialogOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Task Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus Task</AlertDialogTitle>
+            <AlertDialogDescription>
+              Apakah Anda yakin ingin menghapus task ini? Tindakan ini tidak dapat dibatalkan.
+              <div className="mt-4 p-4 bg-muted rounded-lg">
+                <div className="font-medium">{task.name}</div>
+                <div className="text-sm text-muted-foreground mt-1">{task.description}</div>
+                <div className="flex items-center gap-2 mt-2">
+                  <Badge variant={task.priority === "High" ? "destructive" : task.priority === "Medium" ? "default" : "secondary"}>
+                    {task.priority}
+                  </Badge>
+                  <Badge variant="outline">{task.type}</Badge>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteTask}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <span className="loading loading-spinner loading-xs mr-2"></span>
+                  Menghapus...
+                </>
+              ) : (
+                "Hapus Task"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Collapsible>
   )
 } 

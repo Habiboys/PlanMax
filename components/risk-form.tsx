@@ -30,10 +30,10 @@ import { createRisk, updateRisk } from "@/app/actions/project-actions"
 // Skema validasi form menggunakan Zod
 const formSchema = z.object({
   name: z.string().min(1, { message: "Nama risiko wajib diisi" }),
-  description: z.string().optional(),
+  description: z.string().nullable(),
   impact: z.string().min(1, { message: "Dampak risiko wajib dipilih" }),
   probability: z.string().min(1, { message: "Probabilitas risiko wajib dipilih" }),
-  mitigation: z.string().optional(),
+  mitigation: z.string().nullable(),
   status: z.string().min(1, { message: "Status risiko wajib dipilih" }),
 })
 
@@ -44,11 +44,14 @@ interface RiskFormProps {
   risk?: {
     id: number
     name: string
-    description: string
+    description: string | null
     impact: string
     probability: string
-    mitigation: string
+    mitigation: string | null
     status: string
+    projectId: number
+    createdAt: Date
+    updatedAt: Date
   }
   onSuccess?: () => void
   onCancel?: () => void
