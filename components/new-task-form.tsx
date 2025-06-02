@@ -1,33 +1,17 @@
 "use client"
 
-import type React from "react"
 
-import { useState, useEffect } from "react"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
-import { Calendar, Plus } from "lucide-react"
+import { useState } from "react"
 import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 
+import { createTask } from "@/app/actions/task-actions"
 import { Button } from "@/components/ui/button"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { useToast } from "@/hooks/use-toast"
-import { createTask } from "@/app/actions/task-actions"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Form,
   FormControl,
@@ -35,11 +19,16 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
+  FormMessage
 } from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { CalendarIcon } from "lucide-react"
-import { Checkbox } from "@/components/ui/checkbox"
 
 const formSchema = z.object({
   name: z.string().min(1, "Nama task harus diisi"),
@@ -48,9 +37,10 @@ const formSchema = z.object({
   endDate: z.date().optional(),
   assigneeId: z.string().default("unassigned"),
   dependencies: z.array(z.number()).optional(),
-  priority: z.string().default("Medium"),
-  type: z.string().default("Other"),
-  estimatedHours: z.number().min(0).optional(),
+  priority: z.enum(["High", "Medium", "Low"]).default("Medium"),
+  type: z.enum(["Development", "Testing", "Documentation", "Research", "Meeting", "Other"]).default("Development"),
+  estimatedHours: z.number().min(1, "Estimasi waktu minimal 1 jam").default(1),
+  team_size: z.enum(["Small", "Medium", "Large"]).optional(),
 })
 
 interface NewTaskFormProps {
@@ -80,18 +70,32 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
       endDate: new Date(),
       assigneeId: "unassigned",
       priority: "Medium",
-      type: "Other",
-      estimatedHours: 0,
+      type: "Development",
+      estimatedHours: 1,
+      team_size: teamMembers.length <= 3 ? "Small" : teamMembers.length <= 6 ? "Medium" : "Large",
     },
   })
 
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsLoading(true)
     try {
-      const result = await createTask(projectId, {
-        ...values,
+      // Siapkan data yang akan dikirim
+      const taskData = {
+        name: values.name,
+        description: values.description || "",
+        startDate: values.startDate || new Date(),
+        endDate: values.endDate || new Date(),
+        status: "Not Started",
+        priority: values.priority,
+        type: values.type,
+        team_size: values.team_size || (teamMembers.length <= 3 ? "Small" : teamMembers.length <= 6 ? "Medium" : "Large"),
+        estimatedHours: Number(values.estimatedHours),
         dependencies: selectedDependencies,
-      })
+      }
+
+      console.log("Data yang dikirim:", taskData)
+
+      const result = await createTask(projectId, taskData)
 
       if (result.success) {
         if (onTaskCreated) {
@@ -107,9 +111,10 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
         })
       }
     } catch (error) {
+      console.error("Error creating task:", error)
       toast({
         title: "Error",
-        description: "Terjadi kesalahan yang tidak terduga. Silakan coba lagi.",
+        description: "Terjadi kesalahan saat membuat task. Silakan coba lagi.",
         variant: "destructive",
       })
     } finally {
@@ -232,7 +237,7 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
                       selected={field.value}
                       onSelect={field.onChange}
                       disabled={(date) =>
-                        date < form.getValues("startDate") ||
+                        date < (form.getValues("startDate") || new Date()) ||
                         date < new Date(new Date().setHours(0, 0, 0, 0))
                       }
                       initialFocus
@@ -308,10 +313,12 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="Feature">Fitur</SelectItem>
-                    <SelectItem value="Bug">Bug</SelectItem>
-                    <SelectItem value="Documentation">Dokumentasi</SelectItem>
-                    <SelectItem value="Other">Lainnya</SelectItem>
+                    <SelectItem value="Development">Development</SelectItem>
+                    <SelectItem value="Testing">Testing</SelectItem>
+                    <SelectItem value="Documentation">Documentation</SelectItem>
+                    <SelectItem value="Research">Research</SelectItem>
+                    <SelectItem value="Meeting">Meeting</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -329,12 +336,19 @@ export function NewTaskForm({ projectId, teamMembers, tasks, onTaskCreated }: Ne
               <FormControl>
                 <Input 
                   type="number" 
-                  min="0"
+                  min="1"
                   placeholder="Masukkan estimasi waktu dalam jam" 
                   {...field}
-                  onChange={e => field.onChange(Number(e.target.value))}
+                  value={field.value || 1}
+                  onChange={e => {
+                    const value = parseInt(e.target.value);
+                    field.onChange(isNaN(value) || value < 1 ? 1 : value);
+                  }}
                 />
               </FormControl>
+              <FormDescription>
+                Minimal 1 jam
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

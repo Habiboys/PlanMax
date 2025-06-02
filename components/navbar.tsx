@@ -1,19 +1,13 @@
-import { useSession } from "next-auth/react"
-import { useState } from "react"
-import { useToast } from "@/components/ui/use-toast"
-import { Link } from "next/navigation"
-import { formatDistanceToNow } from "date-fns"
-import { Bell, Avatar, AvatarImage, AvatarFallback, Calendar, User, Users, LogOut } from "lucide-react"
+import { Notifications } from "@/components/notifications"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { signOut } from "next-auth/react"
+import { Calendar, LogIn, LogOut, User, Users } from "lucide-react"
+import { signIn, signOut, useSession } from "next-auth/react"
+import { Link } from "next/navigation"
 
 export function Navbar() {
-  const { data: session } = useSession()
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [unreadCount, setUnreadCount] = useState(0)
-  const { toast } = useToast()
+  const { data: session, status } = useSession()
 
   return (
     <nav className="border-b bg-background">
@@ -21,56 +15,18 @@ export function Navbar() {
         <div className="flex h-16 items-center justify-between">
           {/* Bagian kiri - Logo */}
           <div className="flex flex-1 items-center justify-start min-w-[200px]">
-            <Link href="/dashboard" className="flex items-center gap-2 font-bold ml-2">
+            <Link href={session ? "/dashboard" : "/"} className="flex items-center gap-2 font-bold ml-2">
               <Calendar className="h-6 w-6 text-primary" />
-              <span className="text-xl hidden md:block">Smart Project Planner</span>
+              <span className="text-xl hidden md:block">PlanMax</span>
             </Link>
           </div>
 
           {/* Bagian kanan */}
           <div className="flex flex-1 items-center justify-end gap-6">
-            {session?.user && (
+            {status === "authenticated" && session?.user ? (
               <div className="flex items-center gap-4">
                 {/* Notifikasi */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative rounded-full p-2 hover:bg-accent/50">
-                      <Bell className="h-5 w-5" />
-                      {unreadCount > 0 && (
-                        <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
-                          {unreadCount}
-                        </span>
-                      )}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-80">
-                    <DropdownMenuLabel>Notifikasi</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {notifications.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-muted-foreground">
-                        Tidak ada notifikasi
-                      </div>
-                    ) : (
-                      <div className="max-h-[300px] overflow-y-auto">
-                        {notifications.map((notification) => (
-                          <DropdownMenuItem
-                            key={notification.id}
-                            className="flex flex-col items-start gap-1 p-4"
-                            onClick={() => handleNotificationClick(notification)}
-                          >
-                            <div className="flex items-center gap-2">
-                              <Bell className="h-4 w-4" />
-                              <span className="font-medium">{notification.message}</span>
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
-                            </span>
-                          </DropdownMenuItem>
-                        ))}
-                      </div>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Notifications />
 
                 {/* User Menu */}
                 <DropdownMenu>
@@ -113,7 +69,12 @@ export function Navbar() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-            )}
+            ) : status === "unauthenticated" ? (
+              <Button onClick={() => signIn()} variant="default" className="flex items-center gap-2">
+                <LogIn className="h-4 w-4" />
+                <span>Masuk</span>
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>

@@ -1,47 +1,47 @@
 "use client"
 
-import { useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
 import { format } from "date-fns"
+import { useState } from "react"
+import { useForm } from "react-hook-form"
 import * as z from "zod"
 
+import { updateTask } from "@/app/actions/task-actions"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
 } from "@/components/ui/popover"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { CalendarIcon } from "lucide-react"
-import { updateTask } from "@/app/actions/task-actions"
-import { useToast } from "@/hooks/use-toast"
 
 const taskSchema = z.object({
   name: z.string().min(1, "Nama task harus diisi"),
   description: z.string().optional(),
   startDate: z.date(),
   endDate: z.date(),
-  priority: z.string(),
-  type: z.string(),
+  priority: z.enum(["High", "Medium", "Low"]),
+  type: z.enum(["Development", "Testing", "Documentation", "Research", "Meeting", "Other"]),
   estimatedHours: z.number().min(0).optional(),
   assigneeId: z.number().nullable(),
 })
@@ -78,8 +78,8 @@ export function EditTaskForm({ projectId, task, teamMembers, onSuccess, onCancel
       description: task.description,
       startDate: new Date(task.startDate),
       endDate: new Date(task.endDate),
-      priority: task.priority,
-      type: task.type,
+      priority: task.priority as z.infer<typeof taskSchema>["priority"],
+      type: task.type as z.infer<typeof taskSchema>["type"],
       estimatedHours: task.estimatedHours || undefined,
       assigneeId: task.assigneeId,
     },
@@ -271,10 +271,12 @@ export function EditTaskForm({ projectId, task, teamMembers, onSuccess, onCancel
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="Feature">Fitur</SelectItem>
-                    <SelectItem value="Bug">Bug</SelectItem>
-                    <SelectItem value="Documentation">Dokumentasi</SelectItem>
-                    <SelectItem value="Other">Lainnya</SelectItem>
+                    <SelectItem value="Development">Development</SelectItem>
+                    <SelectItem value="Testing">Testing</SelectItem>
+                    <SelectItem value="Documentation">Documentation</SelectItem>
+                    <SelectItem value="Research">Research</SelectItem>
+                    <SelectItem value="Meeting">Meeting</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />

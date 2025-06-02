@@ -1,17 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { PlusCircle, UserPlus, Trash2, Settings, Users } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { Edit, Info, MoreVertical, PlusCircle, Trash2, UserPlus } from "lucide-react"
+import Link from "next/link"
+import { useEffect, useState } from "react"
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { getUserTeams, createTeam, deleteTeam, addTeamMember } from "@/app/actions/team-actions"
-import { Toaster } from "@/components/ui/toaster"
+import { addTeamMember, deleteTeam, getUserTeams } from "@/app/actions/team-actions"
+import { TeamInvitations } from "@/components/team-invitations"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,23 +17,52 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { TeamInvitations } from "@/components/team-invitations"
-import { LoadingSpinner } from "@/components/loading-spinner"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Textarea } from "@/components/ui/textarea"
+import { Toaster } from "@/components/ui/toaster"
+
+interface TeamMember {
+  id: number
+  name: string
+  avatar: string
+  role: string
+}
+
+interface Team {
+  id: string
+  name: string
+  description: string
+  projects: number
+  members: TeamMember[]
+  role: string
+}
 
 export default function TeamsPage() {
   const { toast } = useToast()
-  const [teams, setTeams] = useState([])
+  const [teams, setTeams] = useState<Team[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false)
-  const [selectedTeamId, setSelectedTeamId] = useState(null)
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
   const [newTeam, setNewTeam] = useState({ name: "", description: "" })
   const [newMember, setNewMember] = useState({ email: "", role: "MEMBER" })
   const [isCreatingTeam, setIsCreatingTeam] = useState(false)
   const [isAddingMember, setIsAddingMember] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [teamToDelete, setTeamToDelete] = useState({ id: null, name: "" })
+  const [teamToDelete, setTeamToDelete] = useState<{ id: string | null; name: string }>({ id: null, name: "" })
   const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
@@ -70,7 +94,7 @@ export default function TeamsPage() {
     fetchTeams()
   }, [toast])
 
-  const handleCreateTeam = async (e) => {
+  const handleCreateTeam = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!newTeam.name) {
@@ -94,21 +118,21 @@ export default function TeamsPage() {
           name: String(newTeam.name),
           description: newTeam.description || "",
         }),
-      });
+      })
       
-      // Periksa status respons terlebih dahulu
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `Server error: ${response.status}`);
+        const errorText = await response.text()
+        throw new Error(errorText || `Server error: ${response.status}`)
       }
       
-      // Coba parse sebagai JSON hanya jika respons OK
-      const result = await response.json();
+      const result = await response.json()
       
       if (result.success) {
         // Refresh teams list
         const updatedTeams = await getUserTeams()
-        setTeams(updatedTeams.teams)
+        if (updatedTeams.teams) {
+          setTeams(updatedTeams.teams)
+        }
         
         setNewTeam({ name: "", description: "" })
         setIsDialogOpen(false)
@@ -124,11 +148,12 @@ export default function TeamsPage() {
           variant: "destructive",
         })
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error creating team:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to create team. Please try again."
       toast({
         title: "Error",
-        description: error.message || "Failed to create team. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -136,7 +161,7 @@ export default function TeamsPage() {
     }
   }
 
-  const handleDeleteTeam = async (teamId) => {
+  const handleDeleteTeam = async (teamId: string) => {
     setIsDeleting(true)
     
     try {
@@ -170,18 +195,27 @@ export default function TeamsPage() {
     }
   }
 
-  const openDeleteConfirmation = (team) => {
+  const openDeleteConfirmation = (team: Team) => {
     setTeamToDelete({ id: team.id, name: team.name })
     setIsDeleteDialogOpen(true)
   }
 
-  const handleAddMember = async (e) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!newMember.email) {
       toast({
         title: "Email required",
         description: "Please enter the email of the member you want to add.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!selectedTeamId) {
+      toast({
+        title: "Team selection required",
+        description: "Please select a team to add the member to.",
         variant: "destructive",
       })
       return
@@ -199,7 +233,9 @@ export default function TeamsPage() {
       if (result.success) {
         // Refresh teams list
         const updatedTeams = await getUserTeams()
-        setTeams(updatedTeams.teams)
+        if (updatedTeams.teams) {
+          setTeams(updatedTeams.teams)
+        }
         
         setNewMember({ email: "", role: "MEMBER" })
         setIsAddMemberDialogOpen(false)
@@ -290,41 +326,41 @@ export default function TeamsPage() {
       <div className="grid gap-6">
         <TeamInvitations />
         
-        {/* Tambahkan tombol Create Team di sini */}
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Tim Saya</h1>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button>
                 <PlusCircle className="mr-2 h-4 w-4" />
-                Create New Team
+                Buat Tim Baru
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create New Team</DialogTitle>
+                <DialogTitle>Buat Tim Baru</DialogTitle>
                 <DialogDescription>
-                  Create a new team to collaborate with your team members.
+                  Buat tim baru untuk berkolaborasi dengan anggota tim Anda.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleCreateTeam}>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="team-name">Team Name</Label>
+                    <Label htmlFor="team-name">Nama Tim</Label>
                     <Input
                       id="team-name"
                       value={newTeam.name}
                       onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })}
-                      placeholder="Enter team name"
+                      placeholder="Masukkan nama tim"
                       disabled={isCreatingTeam}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="team-description">Description</Label>
+                    <Label htmlFor="team-description">Deskripsi</Label>
                     <Textarea
                       id="team-description"
                       value={newTeam.description}
                       onChange={(e) => setNewTeam({ ...newTeam, description: e.target.value })}
-                      placeholder="Enter team description (optional)"
+                      placeholder="Masukkan deskripsi tim (opsional)"
                       className="resize-none"
                       disabled={isCreatingTeam}
                     />
@@ -332,139 +368,180 @@ export default function TeamsPage() {
                 </div>
                 <DialogFooter>
                   <Button type="submit" disabled={isCreatingTeam}>
-                    {isCreatingTeam ? "Creating..." : "Create Team"}
+                    {isCreatingTeam ? "Membuat..." : "Buat Tim"}
                   </Button>
                 </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>
         </div>
-        
+
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {teams.map((team) => (
             <Card key={team.id}>
               <CardHeader>
-                <CardTitle>{team.name}</CardTitle>
+                <CardTitle className="flex items-center justify-between">
+                  <span>{team.name}</span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Aksi Tim</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href={`/dashboard/teams/${team.id}`} className="flex items-center">
+                          <Info className="mr-2 h-4 w-4" />
+                          Lihat Detail
+                        </Link>
+                      </DropdownMenuItem>
+                      {team.role === "OWNER" && (
+                        <DropdownMenuItem asChild>
+                          <Link href={`/dashboard/teams/${team.id}`} className="flex items-center">
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit Tim
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                      {(team.role === "OWNER" || team.role === "ADMIN") && (
+                        <DropdownMenuItem onSelect={() => {
+                          setSelectedTeamId(team.id)
+                          setIsAddMemberDialogOpen(true)
+                        }}>
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          Tambah Anggota
+                        </DropdownMenuItem>
+                      )}
+                      {team.role === "OWNER" && (
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onSelect={() => openDeleteConfirmation(team)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Hapus Tim
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </CardTitle>
                 <CardDescription>{team.description}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Members:</span>
+                    <span className="text-muted-foreground">Anggota:</span>
                     <span>{team.members.length}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Projects:</span>
-                    <span>{team.projects?.length || 0}</span>
+                    <span className="text-muted-foreground">Proyek:</span>
+                    <span>{team.projects || 0}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Your Role:</span>
+                    <span className="text-muted-foreground">Peran Anda:</span>
                     <span>{team.role}</span>
                   </div>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
-                {team.role === "OWNER" || team.role === "ADMIN" ? (
-                  <Dialog open={isAddMemberDialogOpen && selectedTeamId === team.id} onOpenChange={(open) => {
-                    setIsAddMemberDialogOpen(open)
-                    if (open) setSelectedTeamId(team.id)
-                  }}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <UserPlus className="mr-2 h-4 w-4" />
-                        Add Member
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Add Team Member</DialogTitle>
-                        <DialogDescription>
-                          Add a new member to team "{team.name}".
-                        </DialogDescription>
-                      </DialogHeader>
-                      <form onSubmit={handleAddMember}>
-                        <div className="grid gap-4 py-4">
-                          <div className="grid gap-2">
-                            <Label htmlFor="email">Email</Label>
-                            <Input
-                              id="email"
-                              type="email"
-                              value={newMember.email}
-                              onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
-                              placeholder="email@example.com"
-                              disabled={isAddingMember}
-                            />
-                          </div>
-                          <div className="grid gap-2">
-                            <Label htmlFor="role">Role</Label>
-                            <select
-                              id="role"
-                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                              value={newMember.role}
-                              onChange={(e) => setNewMember({ ...newMember, role: e.target.value })}
-                              disabled={isAddingMember}
-                            >
-                              <option value="MEMBER">Member</option>
-                              <option value="ADMIN">Admin</option>
-                            </select>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button type="submit" disabled={isAddingMember}>
-                            {isAddingMember ? "Adding..." : "Add Member"}
-                          </Button>
-                        </DialogFooter>
-                      </form>
-                    </DialogContent>
-                  </Dialog>
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    Only admins can add members
-                  </div>
-                )}
-                <div className="flex space-x-2">
-                  <Button variant="outline" size="sm">
-                    <Settings className="h-4 w-4" />
+                <Button variant="outline" asChild>
+                  <Link href={`/dashboard/teams/${team.id}`}>
+                    <Info className="mr-2 h-4 w-4" />
+                    Detail Tim
+                  </Link>
+                </Button>
+                {(team.role === "OWNER" || team.role === "ADMIN") && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedTeamId(team.id)
+                      setIsAddMemberDialogOpen(true)
+                    }}
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Tambah Anggota
                   </Button>
-                  {team.role === "OWNER" && (
-                    <Button 
-                      variant="destructive" 
-                      size="sm" 
-                      onClick={() => openDeleteConfirmation(team)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
+                )}
               </CardFooter>
             </Card>
           ))}
         </div>
       </div>
-      <Toaster />
-      
+
+      {/* Dialog Tambah Anggota */}
+      <Dialog open={isAddMemberDialogOpen} onOpenChange={setIsAddMemberDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tambah Anggota Tim</DialogTitle>
+            <DialogDescription>
+              Undang anggota baru ke tim Anda dengan mengirimkan undangan email.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddMember}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={newMember.email}
+                  onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                  placeholder="email@contoh.com"
+                  disabled={isAddingMember}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="role">Peran</Label>
+                <select
+                  id="role"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={newMember.role}
+                  onChange={(e) => setNewMember({ ...newMember, role: e.target.value })}
+                  disabled={isAddingMember}
+                >
+                  <option value="MEMBER">Member</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={isAddingMember}>
+                {isAddingMember ? "Menambahkan..." : "Tambah Anggota"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal Konfirmasi Hapus Tim */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Team Deletion</AlertDialogTitle>
+            <AlertDialogTitle>Hapus Tim</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the team "{teamToDelete.name}"? This action cannot be undone.
-              All team data, including team membership will be permanently deleted.
+              Apakah Anda yakin ingin menghapus tim "{teamToDelete.name}"? Tindakan ini tidak dapat dibatalkan.
+              Semua data tim, termasuk keanggotaan tim akan dihapus secara permanen.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Batal</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => handleDeleteTeam(teamToDelete.id)}
+              onClick={() => {
+                if (teamToDelete.id) {
+                  handleDeleteTeam(teamToDelete.id)
+                }
+              }}
               disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isDeleting ? "Deleting..." : "Delete Team"}
+              {isDeleting ? "Menghapus..." : "Hapus Tim"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Toaster />
     </div>
   )
 }

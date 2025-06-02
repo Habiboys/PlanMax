@@ -1,11 +1,24 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
 import { getServerSession } from "next-auth"
+import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
-import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
+
+interface TeamMember {
+  id: number
+  userId: number
+  teamId: string
+  role: string
+  user: {
+    id: number
+    name: string | null
+    email: string
+    avatar: string | null
+  }
+}
 
 // Schema untuk validasi tim
 const teamSchema = z.object({
@@ -33,10 +46,14 @@ export async function createTeam(name: string, description: string) {
       data: {
         name,
         description,
-        createdById: session.user.id,
+        owner: {
+          connect: {
+            id: Number(session.user.id)
+          }
+        },
         members: {
           create: {
-            userId: session.user.id,
+            userId: Number(session.user.id),
             role: "OWNER",
           },
         },
@@ -117,10 +134,14 @@ export async function updateTeam(teamId: string, formData: FormData) {
     throw new Error("Anda harus login untuk memperbarui tim")
   }
 
-  const validatedFields = teamSchema.parse({
+  const validatedFields = {
     name: formData.get("name"),
     description: formData.get("description"),
-  })
+  }
+
+  if (!validatedFields.name) {
+    return { success: false, error: "Nama tim harus diisi" }
+  }
 
   try {
     // Periksa apakah pengguna memiliki izin untuk memperbarui tim ini
@@ -128,24 +149,55 @@ export async function updateTeam(teamId: string, formData: FormData) {
       where: {
         teamId: teamId,
         userId: Number(session.user.id),
-        role: { in: ["OWNER", "ADMIN"] }, // Hanya pemilik dan admin yang dapat memperbarui
+        role: "OWNER", // Hanya pemilik yang dapat memperbarui tim
       },
     })
 
     if (!teamMember) {
-      throw new Error("Anda tidak memiliki izin untuk memperbarui tim ini")
+      return { success: false, error: "Anda tidak memiliki izin untuk memperbarui tim ini" }
     }
 
     const team = await prisma.team.update({
       where: { id: teamId },
       data: {
-        name: validatedFields.name,
-        description: validatedFields.description || "",
+        name: validatedFields.name as string,
+        description: validatedFields.description as string || "",
+      },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatar: true,
+              },
+            },
+          },
+        },
       },
     })
 
     revalidatePath("/dashboard/teams")
-    return { success: true, teamId: team.id }
+    revalidatePath(`/dashboard/teams/${teamId}`)
+    
+    return { 
+      success: true, 
+      team: {
+        id: team.id,
+        name: team.name,
+        description: team.description,
+        members: team.members.map((member) => ({
+          id: member.id,
+          name: member.user.name,
+          email: member.user.email,
+          avatar: member.user.avatar,
+          role: member.role,
+        })),
+        userRole: "OWNER",
+      }
+    }
   } catch (error) {
     console.error("Gagal memperbarui tim:", error)
     return { success: false, error: "Gagal memperbarui tim. Silakan coba lagi." }
@@ -341,7 +393,7 @@ export async function acceptTeamInvitation(invitationId: number) {
         userId: invitation.invitedByUserId,
         type: "team_invitation_accepted",
         message: `${session.user.name} telah menerima undangan untuk bergabung dengan tim "${invitation.team.name}"`,
-        relatedId: invitation.teamId,
+        relatedId: Number(invitation.id),
         relatedType: "team"
       }
     })
@@ -392,7 +444,7 @@ export async function declineTeamInvitation(invitationId: number) {
         userId: invitation.invitedByUserId,
         type: "team_invitation_declined",
         message: `${session.user.name} telah menolak undangan untuk bergabung dengan tim "${invitation.team.name}"`,
-        relatedId: invitation.teamId,
+        relatedId: Number(invitation.id),
         relatedType: "team"
       }
     })
@@ -551,32 +603,55 @@ export async function assignTeamToProject(teamId: string, projectId: number) {
   }
 }
 
+export async function createNotification(userId: number, type: string, message: string, relatedId: number) {
+  try {
+    await prisma.notification.create({
+      data: {
+        userId,
+        type,
+        message,
+        relatedId,
+      },
+    })
+  } catch (error) {
+    console.error("Error creating notification:", error)
+  }
+}
+
+// Mendapatkan semua tim
 export async function getTeams() {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
-      return { success: false, error: "Unauthorized" }
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+    const teams = await prisma.team.findMany({
       include: {
-        teams: {
+        members: {
           include: {
-            team: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatar: true,
+              },
+            },
           },
         },
       },
     })
 
-    if (!user) {
-      return { success: false, error: "User not found" }
-    }
-
-    const teams = user.teams.map((teamMember) => teamMember.team)
-    return { success: true, teams }
+    return teams.map((team) => ({
+      id: team.id,
+      name: team.name,
+      description: team.description,
+      members: team.members.map((member) => ({
+        id: member.user.id,
+        name: member.user.name,
+        email: member.user.email,
+        avatar: member.user.avatar,
+        role: member.role,
+      })),
+    }))
   } catch (error) {
-    console.error("Error getting teams:", error)
-    return { success: false, error: "Failed to get teams" }
+    console.error("Error fetching teams:", error)
+    return []
   }
 }

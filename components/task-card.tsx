@@ -1,34 +1,23 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { format, parseISO } from "date-fns"
-import { 
-  CheckCircle, Circle, Clock, MoreHorizontal, 
-  Pencil, Trash, Award, ChevronDown, ChevronUp, 
-  MessageSquare, UserPlus 
-} from "lucide-react"
-
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import { Slider } from "@/components/ui/slider"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { TaskBlockerIndicator } from "@/components/task-blocker-indicator"
-import { TaskTimelinePrediction } from "@/components/task-timeline-prediction"
-import { TaskComments } from "@/components/task-comments"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { updateTaskProgress, deleteTask, updateTaskDates, updateTaskAssignee } from "@/app/actions/task-actions"
-import { addTaskCompletionPoints } from "@/app/actions/points-actions"
-import { getTaskComments } from "@/app/actions/comment-actions"
-import { useToast } from "@/hooks/use-toast"
-import { EditTaskForm } from "@/components/edit-task-form"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+  Award,
+  CheckCircle, Circle, Clock,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil, Trash,
+  UserPlus
+} from "lucide-react"
+import { useEffect, useState } from "react"
+
+import { getTaskComments } from "@/app/actions/comment-actions"
+import { addTaskCompletionPoints } from "@/app/actions/points-actions"
+import { deleteTask, updateTaskAssignee, updateTaskDates, updateTaskProgress } from "@/app/actions/task-actions"
+import { EditTaskForm } from "@/components/edit-task-form"
+import { TaskBlockerIndicator } from "@/components/task-blocker-indicator"
+import { TaskComments } from "@/components/task-comments"
+import { TaskTimelinePrediction } from "@/components/task-timeline-prediction"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +28,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Progress } from "@/components/ui/progress"
+import { Slider } from "@/components/ui/slider"
+import { useToast } from "@/hooks/use-toast"
 
 interface TaskCardProps {
   projectId: number
@@ -400,10 +403,13 @@ export function TaskCard({
               description: task.description,
               startDate: task.startDate,
               endDate: task.endDate,
-              status: task.status,
-              estimatedHours: task.estimatedHours || undefined,
+              status: task.status as "Not Started" | "In Progress" | "Completed",
+              priority: task.priority as "High" | "Medium" | "Low",
+              task_type: task.type as "Development" | "Testing" | "Documentation" | "Research" | "Meeting" | "Other",
+              estimated_hours: task.estimatedHours || 0,
               dependencies: task.dependencies,
-              team_size: "small"
+              team_size: "Small",
+              dependency_count: task.dependencies.length
             }}
             historicalTasks={tasks.map(t => ({
               id: t.id,
@@ -411,10 +417,13 @@ export function TaskCard({
               description: t.description,
               startDate: t.startDate,
               endDate: t.endDate,
-              status: t.status,
-              estimatedHours: t.estimatedHours || undefined,
+              status: t.status as "Not Started" | "In Progress" | "Completed",
+              priority: t.priority as "High" | "Medium" | "Low",
+              task_type: t.type as "Development" | "Testing" | "Documentation" | "Research" | "Meeting" | "Other",
+              estimated_hours: t.estimatedHours || 0,
               dependencies: t.dependencies,
-              team_size: "small"
+              team_size: "Small",
+              dependency_count: t.dependencies.length
             }))}
             onUpdateTaskDates={handleUpdateTaskDates}
           />
@@ -539,7 +548,7 @@ export function TaskCard({
           <EditTaskForm
             projectId={projectId}
             task={task}
-            teamMembers={teamMembers}
+            teamMembers={members}
             onSuccess={() => {
               setIsEditDialogOpen(false)
               onTaskUpdated()

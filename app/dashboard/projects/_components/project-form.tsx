@@ -1,16 +1,22 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
+import { CalendarIcon } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 
+import { createProject, updateProject } from "@/app/actions/project-actions"
 import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -18,13 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
-import { createProject, updateProject } from "@/app/actions/project-actions"
+import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
 
 interface ProjectFormProps {
@@ -53,9 +53,17 @@ export function ProjectForm({ project }: ProjectFormProps = {}) {
     setIsLoading(true)
 
     try {
-      const formData = new FormData(event.currentTarget)
+      const formElement = event.currentTarget
+      const formData = new FormData(formElement)
       
-      // Tambahkan tanggal ke form data
+      // Konversi FormData ke objek yang sesuai dengan schema
+      const projectData = {
+        name: formData.get("name") as string,
+        description: formData.get("description") as string || undefined,
+        teamId: formData.get("teamId") ? Number(formData.get("teamId")) : undefined
+      }
+      
+      // Tambahkan tanggal ke data project
       if (startDate) {
         formData.set("startDate", startDate.toISOString())
       }
@@ -66,23 +74,36 @@ export function ProjectForm({ project }: ProjectFormProps = {}) {
       let result
       if (project) {
         result = await updateProject(project.id, formData)
+        if (result.success) {
+          toast({
+            title: "Project berhasil diperbarui",
+            description: "Anda akan dialihkan ke halaman detail project",
+          })
+          router.push(`/dashboard/projects/${project.id}`)
+          router.refresh()
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Gagal",
+            description: result.error,
+          })
+        }
       } else {
-        result = await createProject(formData)
-      }
-
-      if (result.success) {
-        toast({
-          title: project ? "Project berhasil diperbarui" : "Project berhasil dibuat",
-          description: "Anda akan dialihkan ke halaman detail project",
-        })
-        router.push(`/dashboard/projects/${result.projectId}`)
-        router.refresh()
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Gagal",
-          description: result.error,
-        })
+        result = await createProject(projectData)
+        if ("error" in result) {
+          toast({
+            variant: "destructive",
+            title: "Gagal",
+            description: result.error,
+          })
+        } else if (result.success && result.project) {
+          toast({
+            title: "Project berhasil dibuat",
+            description: "Anda akan dialihkan ke halaman detail project",
+          })
+          router.push(`/dashboard/projects/${result.project.id}`)
+          router.refresh()
+        }
       }
     } catch (error) {
       toast({

@@ -178,7 +178,7 @@ export default function Home() {
               <Badge variant="outline" className="mb-2">Testimoni</Badge>
               <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl">Apa Kata Pengguna Kami</h2>
               <p className="text-muted-foreground">
-                Ribuan manajer proyek menggunakan Smart Project Planner untuk meningkatkan efisiensi tim mereka
+                Ribuan manajer proyek menggunakan PlanMax untuk meningkatkan efisiensi tim mereka
               </p>
             </div>
             
@@ -191,7 +191,7 @@ export default function Home() {
                     ))}
                   </div>
                   <p className="mb-4 text-muted-foreground italic">
-                    "Smart Project Planner telah mengubah cara tim kami mengelola proyek. Kami dapat dengan mudah melacak dependensi dan progres setiap tugas."
+                    "PlanMax telah mengubah cara tim kami mengelola proyek. Kami dapat dengan mudah melacak dependensi dan progres setiap tugas."
                   </p>
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
@@ -257,7 +257,7 @@ export default function Home() {
           <div className="container max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col items-center text-center space-y-4">
               <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl">
-                Siap Memulai Dengan Smart Project Planner?
+                Siap Memulai Dengan PlanMax?
               </h2>
               <p className="max-w-[600px] text-primary-foreground/90 md:text-xl">
                 Bergabunglah dengan ribuan manajer proyek yang telah meningkatkan efisiensi tim mereka
@@ -285,7 +285,7 @@ export default function Home() {
             <div className="space-y-3">
               <div className="flex items-center gap-2 font-semibold">
                 <Calendar className="h-5 w-5 text-primary" />
-                <span>Smart Project Planner</span>
+                <span>PlanMax</span>
               </div>
               <p className="text-sm text-muted-foreground">
                 Solusi manajemen proyek cerdas untuk tim modern.
@@ -358,7 +358,7 @@ export default function Home() {
           
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 mt-8 pt-8 border-t">
             <p className="text-center text-sm text-muted-foreground md:text-left">
-              &copy; {new Date().getFullYear()} Smart Project Planner. Semua hak dilindungi.
+              &copy; {new Date().getFullYear()} PlanMax. Semua hak dilindungi.
             </p>
             <div className="flex gap-4">
               <Link href="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">

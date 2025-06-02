@@ -13,6 +13,12 @@ export interface BlockerAnalysis {
   confidence: number;
   flagged_phrases: string[];
   recommendation: string;
+  commentPreviews?: Array<{ phrase: string; from: string }>;
+  groupedComments?: Array<{
+    preview: string;
+    phrases: string[];
+    confidence: number;
+  }>;
 }
 
 /**
@@ -50,14 +56,20 @@ export interface TimelinePrediction {
  */
 export interface TaskData {
   id?: number;
-  name: string;
+  title?: string;
+  name?: string;
   description?: string;
+  status: 'Not Started' | 'In Progress' | 'Completed';
+  priority: 'High' | 'Medium' | 'Low';
+  type?: string;
+  team_size: 'Small' | 'Medium' | 'Large';
+  task_type: 'Development' | 'Testing' | 'Documentation' | 'Research' | 'Meeting' | 'Other';
+  estimated_hours: number;
+  word_count?: number;
+  dependency_count: number;
   startDate?: string;
   endDate?: string;
-  status?: string;
-  estimatedHours?: number;
   dependencies?: number[];
-  team_size?: string;
 }
 
 /**
@@ -83,8 +95,9 @@ export async function checkMlServiceHealth(): Promise<boolean> {
 
 /**
  * Mendeteksi blocker dari teks
+ * @param text Teks yang akan dianalisis (bisa berisi nama task, deskripsi, dan komentar)
  */
-export async function detectBlockers(text: string, threshold: number = 0.2): Promise<BlockerAnalysis> {
+export async function detectBlockers(text: string): Promise<BlockerAnalysis> {
   try {
     // Periksa kesehatan server terlebih dahulu
     const isHealthy = await checkMlServiceHealth();
@@ -98,8 +111,7 @@ export async function detectBlockers(text: string, threshold: number = 0.2): Pro
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        text,
-        threshold,
+        text
       }),
     });
 
@@ -120,84 +132,11 @@ export async function detectBlockers(text: string, threshold: number = 0.2): Pro
   }
 }
 
-/**
- * Menganalisis komentar untuk menemukan blocker
- */
-export async function analyzeComments(
-  comments: CommentData[],
-  threshold: number = 0.2
-): Promise<BlockerAnalysis> {
-  try {
-    // Periksa kesehatan server terlebih dahulu
-    const isHealthy = await checkMlServiceHealth();
-    if (!isHealthy) {
-      throw new Error('ML service is unavailable');
-    }
-    
-    const response = await fetch(`${ML_API_URL}/analyze-comments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        comments,
-        threshold,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error from ML API: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error analyzing comments:', error);
-    // Re-throw error untuk ditangani oleh komponen
-    throw error;
-  }
-}
-
-/**
- * Menganalisis task untuk menemukan blocker
- */
-export async function analyzeTask(
-  taskId: number, 
-  name: string, 
-  description?: string, 
-  comments?: CommentData[],
-  threshold: number = 0.2
-): Promise<TaskAnalysisResult> {
-  try {
-    // Periksa kesehatan server terlebih dahulu
-    const isHealthy = await checkMlServiceHealth();
-    if (!isHealthy) {
-      throw new Error('ML service is unavailable');
-    }
-    
-    const response = await fetch(`${ML_API_URL}/analyze-task`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        task_id: taskId,
-        name,
-        description,
-        comments,
-        threshold,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error from ML API: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error analyzing task:', error);
-    // Re-throw error untuk ditangani oleh komponen
-    throw error;
-  }
+// Helper untuk menentukan team size berdasarkan jumlah anggota
+function determineTeamSize(memberCount: number): 'Small' | 'Medium' | 'Large' {
+  if (memberCount <= 3) return 'Small'
+  if (memberCount <= 6) return 'Medium'
+  return 'Large'
 }
 
 /**
@@ -213,76 +152,76 @@ export async function predictTaskTimeline(
     if (!isHealthy) {
       throw new Error('ML service is unavailable');
     }
-    
+
+    // Hitung word count jika tidak disediakan
+    const calculateWordCount = (text?: string) => {
+      if (!text) return 0;
+      return text.trim().split(/\s+/).length;
+    };
+
+    // Format data sesuai yang diharapkan ML API
+    const formattedTask = {
+      status: task.status,
+      priority: task.priority || "Medium",
+      team_size: (task.team_size || "Small").toLowerCase(),
+      task_type: task.task_type || "Development",
+      estimated_hours: task.estimated_hours,
+      title: task.title || task.name || "",
+      description: task.description || "",
+      word_count: task.word_count || calculateWordCount(task.description),
+      dependency_count: Math.max(0, Number(task.dependency_count) || 0),
+      startDate: task.startDate || new Date().toISOString().split('T')[0]
+    };
+
+    // Log request data untuk debugging
+    console.log('Sending request data:', {
+      task: formattedTask
+    });
+
     const response = await fetch(`${ML_API_URL}/predict-timeline`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        task,
-        historical_tasks: historicalTasks,
+        task: formattedTask
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`Error from ML API: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('ML API Error Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
+      throw new Error(`Error from ML API: ${response.statusText} - ${errorText}`);
     }
 
-    return await response.json();
+    const result = await response.json();
+    console.log('ML API Response:', result);
+
+    return {
+      task_id: task.id || result.task_id || 0,
+      predicted_days: result.predicted_days,
+      confidence: result.confidence,
+      predicted_completion_date: result.predicted_completion_date,
+      factors: result.factors || [],
+      suggest_earlier_start: result.suggest_earlier_start || false,
+      suggest_later_end: result.suggest_later_end || false
+    };
+
   } catch (error) {
     console.error('Error predicting task timeline:', error);
     
-    // Estimasi fallback sederhana berdasarkan deskripsi task ketika layanan ML tidak tersedia
-    let predictedDays = null;
-    let confidence = 0.3;
-    let factors = ['ML service unavailable'];
-    
-    // Hitung jumlah kata untuk estimasi sederhana
-    if (task.name) {
-      const wordCount = (task.name + (task.description || "")).split(/\s+/).length;
-      
-      // Estimasi berdasarkan jumlah kata
-      if (wordCount > 0) {
-        predictedDays = Math.max(1, Math.ceil(wordCount / 20));
-        factors = [`Estimasi berdasarkan jumlah kata (${wordCount} kata)`];
-        
-        // Tambahkan faktor jam yang diestimasi jika ada
-        if (task.estimatedHours && task.estimatedHours > 0) {
-          const daysFromHours = Math.ceil(task.estimatedHours / 6); // Asumsi 6 jam per hari kerja
-          predictedDays = Math.ceil((predictedDays + daysFromHours) / 2);
-          factors.push(`Estimasi berdasarkan jam (${task.estimatedHours} jam)`);
-        }
-        
-        // Tambahkan faktor dependensi jika ada
-        if (task.dependencies && task.dependencies.length > 0) {
-          predictedDays = Math.ceil(predictedDays * (1 + (task.dependencies.length * 0.1)));
-          factors.push(`Task memiliki ${task.dependencies.length} dependensi`);
-        }
-      }
-    }
-    
-    // Hitung predicted completion date jika ada startDate
-    let predictedCompletionDate = null;
-    if (task.startDate && predictedDays) {
-      try {
-        const startDate = new Date(task.startDate);
-        const endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + predictedDays - 1);
-        predictedCompletionDate = endDate.toISOString();
-      } catch (e) {
-        console.error('Error calculating completion date:', e);
-      }
-    }
-    
     return {
       task_id: task.id || 0,
-      predicted_days: predictedDays,
-      confidence: confidence,
-      predicted_completion_date: predictedCompletionDate,
-      factors: factors,
+      predicted_days: null,
+      confidence: 0.3,
+      predicted_completion_date: null,
+      factors: ['ML service unavailable'],
       suggest_earlier_start: false,
-      suggest_later_end: predictedDays !== null && task.endDate ? new Date(task.endDate) < new Date(predictedCompletionDate!) : false
+      suggest_later_end: false
     };
   }
 }

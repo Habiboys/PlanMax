@@ -37,7 +37,7 @@
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-switch": "1.1.2",
     "@radix-ui/react-tabs": "1.1.2",
-    "@radix-ui/react-toast": "^1.2.4",
+    "@radix-ui/react-toast": "^1.2.14",
     "@radix-ui/react-toggle": "1.1.1",
     "@radix-ui/react-toggle-group": "1.1.1",
     "@radix-ui/react-tooltip": "1.1.6",
@@ -53,6 +53,7 @@
     "lucide-react": "^0.454.0",
     "next": "15.2.4",
     "next-auth": "latest",
+    "next-intl": "^4.1.0",
     "next-themes": "^0.4.4",
     "nodemailer": "latest",
     "react": "^18.2.0",
@@ -62,7 +63,7 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.0",
     "sonner": "^1.7.1",
-    "tailwind-merge": "^2.5.5",
+    "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
     "zod": "latest"
@@ -78,4 +79,3 @@
     "typescript": "^5"
   }
 }
-

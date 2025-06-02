@@ -2,10 +2,10 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { Calendar } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Calendar } from "lucide-react"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -36,8 +36,8 @@ export default function RegisterPage() {
 
     if (formData.password !== formData.confirmPassword) {
       toast({
-        title: "Passwords don't match",
-        description: "Please make sure your passwords match.",
+        title: "Password tidak cocok",
+        description: "Pastikan password yang Anda masukkan sama.",
         variant: "destructive",
       })
       return
@@ -61,19 +61,19 @@ export default function RegisterPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.message || "Registration failed")
+        throw new Error(data.message || "Registrasi gagal")
       }
 
       toast({
-        title: "Account created!",
-        description: "You can now log in with your credentials.",
+        title: "Akun berhasil dibuat!",
+        description: "Silakan masuk dengan akun Anda.",
       })
 
       router.push("/login")
     } catch (error) {
       toast({
-        title: "Registration failed",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        title: "Registrasi gagal",
+        description: error instanceof Error ? error.message : "Terjadi kesalahan yang tidak terduga",
         variant: "destructive",
       })
     } finally {
@@ -82,24 +82,29 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <Card className="mx-auto max-w-sm">
-        <CardHeader className="space-y-1">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5 p-4">
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader className="space-y-3 text-center">
           <div className="flex items-center justify-center gap-2">
-            <Calendar className="h-6 w-6 text-primary" />
-            <CardTitle className="text-2xl font-bold">Smart Project Planner</CardTitle>
+            <Calendar className="h-8 w-8 text-primary" />
+            <CardTitle className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/80">
+              PlanMax
+            </CardTitle>
           </div>
-          <CardDescription>Create an account to start planning your projects</CardDescription>
+          <CardDescription className="text-base">
+            Buat akun baru untuk mulai mengelola proyek Anda
+          </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="first-name">First name</Label>
+                <Label htmlFor="first-name" className="text-sm font-medium">Nama Depan</Label>
                 <Input
                   id="first-name"
                   name="firstName"
                   placeholder="John"
+                  className="h-11"
                   required
                   value={formData.firstName}
                   onChange={handleChange}
@@ -107,11 +112,12 @@ export default function RegisterPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="last-name">Last name</Label>
+                <Label htmlFor="last-name" className="text-sm font-medium">Nama Belakang</Label>
                 <Input
                   id="last-name"
                   name="lastName"
                   placeholder="Doe"
+                  className="h-11"
                   required
                   value={formData.lastName}
                   onChange={handleChange}
@@ -120,12 +126,13 @@ export default function RegisterPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-sm font-medium">Email</Label>
               <Input
                 id="email"
                 name="email"
                 type="email"
-                placeholder="m@example.com"
+                placeholder="nama@email.com"
+                className="h-11"
                 required
                 value={formData.email}
                 onChange={handleChange}
@@ -133,11 +140,12 @@ export default function RegisterPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-sm font-medium">Password</Label>
               <Input
                 id="password"
                 name="password"
                 type="password"
+                className="h-11"
                 required
                 value={formData.password}
                 onChange={handleChange}
@@ -145,11 +153,12 @@ export default function RegisterPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirm Password</Label>
+              <Label htmlFor="confirm-password" className="text-sm font-medium">Konfirmasi Password</Label>
               <Input
                 id="confirm-password"
                 name="confirmPassword"
                 type="password"
+                className="h-11"
                 required
                 value={formData.confirmPassword}
                 onChange={handleChange}
@@ -157,14 +166,21 @@ export default function RegisterPage() {
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col">
-            <Button className="w-full" type="submit" disabled={isLoading}>
-              {isLoading ? "Creating Account..." : "Create Account"}
+          <CardFooter className="flex flex-col space-y-4">
+            <Button 
+              className="w-full h-11 text-base font-medium" 
+              type="submit" 
+              disabled={isLoading}
+            >
+              {isLoading ? "Membuat Akun..." : "Daftar"}
             </Button>
-            <div className="mt-4 text-center text-sm">
-              Already have an account?{" "}
-              <Link href="/login" className="text-primary underline-offset-4 hover:underline">
-                Login
+            <div className="text-center text-sm">
+              Sudah punya akun?{" "}
+              <Link 
+                href="/login" 
+                className="text-primary hover:text-primary/80 transition-colors font-medium"
+              >
+                Masuk sekarang
               </Link>
             </div>
           </CardFooter>

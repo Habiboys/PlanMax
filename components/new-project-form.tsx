@@ -1,10 +1,12 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { Calendar, FileText, Folder } from "lucide-react"
+import { useRouter } from "next/navigation"
+import type React from "react"
+import { useEffect, useState } from "react"
 
+import { createProject } from "@/app/actions/project-actions"
+import { createProjectFromTemplate, getProjectTemplates } from "@/app/actions/template-actions"
 import { Button } from "@/components/ui/button"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import {
@@ -19,11 +21,9 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { createProject } from "@/app/actions/project-actions"
-import { getProjectTemplates, createProjectFromTemplate } from "@/app/actions/template-actions"
 import { format } from "date-fns"
 
 interface Team {
@@ -165,7 +165,14 @@ export function NewProjectForm() {
         formData.set("endDate", endDate.toISOString())
         formData.set("teamId", selectedTeamId)
 
-        result = await createProject(formData)
+        // Konversi FormData ke objek yang sesuai dengan schema
+        const projectData = {
+          name: formData.get("name") as string,
+          description: formData.get("description") as string || undefined,
+          teamId: Number(selectedTeamId)
+        }
+
+        result = await createProject(projectData)
       }
 
       if (result.success) {
@@ -174,7 +181,10 @@ export function NewProjectForm() {
           description: "Proyek berhasil dibuat",
         })
         setOpen(false)
-        router.push(`/dashboard/${result.projectId}`)
+        
+        // Gunakan result.project.id untuk navigasi
+        const projectId = "project" in result ? result.project.id : result.projectId
+        router.push(`/dashboard/${projectId}`)
       } else {
         toast({
           title: "Error",
@@ -242,19 +252,33 @@ export function NewProjectForm() {
                   value={selectedTemplateId} 
                   onValueChange={setSelectedTemplateId}
                   required
+                  disabled={templates.length === 0}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih template" />
+                    <SelectValue placeholder={templates.length === 0 ? "Belum ada template tersedia" : "Pilih template"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {templates.map((template) => (
-                      <SelectItem key={template.id} value={template.id.toString()}>
-                        {template.name} ({template.tasks.length} tugas)
+                    {templates.length === 0 ? (
+                      <SelectItem value="no-template" disabled>
+                        Belum ada template tersedia
                       </SelectItem>
-                    ))}
+                    ) : (
+                      templates.map((template) => (
+                        <SelectItem key={template.id} value={template.id.toString()}>
+                          {template.name} ({template.tasks.length} tugas)
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
-                {selectedTemplateId && (
+                {templates.length === 0 ? (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <span>Anda belum memiliki template project.</span>
+                    <Button variant="link" className="h-auto p-0 text-xs" onClick={() => router.push("/dashboard/templates")}>
+                      Buat template sekarang
+                    </Button>
+                  </p>
+                ) : selectedTemplateId && (
                   <p className="text-xs text-muted-foreground">
                     {templates.find(t => t.id.toString() === selectedTemplateId)?.description || ""}
                   </p>

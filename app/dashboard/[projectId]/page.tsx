@@ -1,32 +1,18 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { format, parseISO } from "date-fns"
+import { AlertTriangle, BarChart, Calendar, ChevronLeft, FileText, MoreHorizontal, Pencil, SaveAll, Trash2, Users } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { format, parseISO } from "date-fns"
-import { Calendar, ChevronLeft, Download, Edit, FileText, MoreHorizontal, Plus, Share2, Pencil, Users, Trash2, AlertTriangle, SaveAll, BarChart } from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
 
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DashboardHeader } from "@/components/dashboard-header"
+import { archiveProject, deleteProject, getProject } from "@/app/actions/project-actions"
+import { saveProjectAsTemplate } from "@/app/actions/template-actions"
+import { adaptTasksForWorkloadHeatmap } from "@/components/adapters/task-adapters"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { GanttChart } from "@/components/gantt-chart"
-import { TaskList } from "@/components/task-list"
-import { NewTaskForm } from "@/components/new-task-form"
 import { RiskList } from "@/components/risk-list"
-import { WorkloadHeatmap } from "@/components/workload-heatmap"
-import { getProject, archiveProject, deleteProject } from "@/app/actions/project-actions"
-import { saveProjectAsTemplate } from "@/app/actions/template-actions"
-import { useToast } from "@/hooks/use-toast"
+import { TaskList } from "@/components/task-list"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,13 +23,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Toaster } from "@/components/ui/toaster"
-import { LoadingSpinner } from "@/components/loading-spinner"
+import { WorkloadHeatmap } from "@/components/workload-heatmap"
+import { useToast } from "@/hooks/use-toast"
 import { useSession } from "next-auth/react"
-import { Task } from "@/types/schema"
-import { adaptTasksForWorkloadHeatmap, adaptTeamMembersForTaskList } from "@/components/adapters/task-adapters"
 
 interface ProjectTask {
   id: number
@@ -94,6 +90,9 @@ interface ProjectDetails {
     impact: string
     probability: string
     mitigation: string | null
+    projectId: number
+    createdAt: Date
+    updatedAt: Date
   }[]
   userRole?: string
 }
@@ -172,7 +171,10 @@ export default function ProjectPage() {
             status: risk.status || "Open",
             impact: risk.impact || "Low",
             probability: risk.probability || "Low",
-            mitigation: risk.mitigation || null
+            mitigation: risk.mitigation || null,
+            projectId: projectId,
+            createdAt: risk.createdAt || new Date(),
+            updatedAt: risk.updatedAt || new Date()
           })),
           userRole: projectData.userRole || null
         };
@@ -623,7 +625,7 @@ export default function ProjectPage() {
                       projectId={Number(projectId)}
                       tasks={project.tasks}
                       teamMembers={project.team?.members.map(member => ({
-                        id: member.id,
+                        id: member.user.id,
                         name: member.user.name
                       })) || []}
                       onTaskUpdated={handleTaskCreated}

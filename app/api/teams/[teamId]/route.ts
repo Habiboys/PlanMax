@@ -1,10 +1,9 @@
-import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { NextResponse } from "next/server"
 import { z } from "zod"
 
-import { db } from "@/lib/db"
 import { authOptions } from "@/lib/auth"
-import { hashId, verifyHashedId } from '@/lib/utils';
+import { prisma } from "@/lib/prisma"
 
 const updateTeamSchema = z.object({
   name: z.string().min(1, "Nama tim harus diisi"),
@@ -16,37 +15,18 @@ export async function GET(
   { params }: { params: { teamId: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions)
 
     if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 });
+      return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    // Find the actual team ID by checking against all teams the user has access to
-    const userTeams = await db.teamMember.findMany({
-      where: {
-        userId: session.user.id,
-      },
-      select: {
-        teamId: true,
-      },
-    });
-
-    // Find which team's hashed ID matches the provided hashedId
-    const teamId = userTeams.find(team => 
-      verifyHashedId(params.teamId, team.teamId)
-    )?.teamId;
-
-    if (!teamId) {
-      return new NextResponse("Team not found", { status: 404 });
-    }
-
-    const team = await db.team.findUnique({
+    const team = await prisma.team.findUnique({
       where: {
         id: params.teamId,
         members: {
           some: {
-            userId: session.user.id,
+            userId: Number(session.user.id),
           },
         },
       },
@@ -63,16 +43,50 @@ export async function GET(
             },
           },
         },
+        projects: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            status: true,
+          },
+        },
       },
     })
 
     if (!team) {
-      return new NextResponse("Not Found", { status: 404 })
+      return new NextResponse("Tim tidak ditemukan atau Anda tidak memiliki akses", { status: 404 })
     }
 
-    return NextResponse.json(team)
+    // Periksa apakah pengguna adalah anggota tim
+    const userMember = team.members.find(
+      (member) => member.user.id === Number(session.user.id)
+    )
+
+    if (!userMember) {
+      return new NextResponse("Anda tidak memiliki akses ke tim ini", { status: 403 })
+    }
+
+    // Format response
+    const formattedTeam = {
+      id: team.id,
+      name: team.name,
+      description: team.description,
+      members: team.members.map((member) => ({
+        id: member.id,
+        name: member.user.name,
+        email: member.user.email,
+        avatar: member.user.avatar,
+        role: member.role,
+      })),
+      projects: team.projects,
+      userRole: userMember.role,
+    }
+
+    return NextResponse.json(formattedTeam)
   } catch (error) {
-    return new NextResponse("Internal Error", { status: 500 })
+    console.error("Error fetching team:", error)
+    return new NextResponse("Terjadi kesalahan internal", { status: 500 })
   }
 }
 
@@ -90,23 +104,20 @@ export async function PATCH(
     const json = await req.json()
     const body = updateTeamSchema.parse(json)
 
-    const team = await db.team.findUnique({
+    // Periksa apakah pengguna adalah owner tim
+    const teamMember = await prisma.teamMember.findFirst({
       where: {
-        id: params.teamId,
-        members: {
-          some: {
-            userId: session.user.id,
-            role: "OWNER",
-          },
-        },
+        teamId: params.teamId,
+        userId: Number(session.user.id),
+        role: "OWNER",
       },
     })
 
-    if (!team) {
-      return new NextResponse("Not Found", { status: 404 })
+    if (!teamMember) {
+      return new NextResponse("Anda tidak memiliki izin untuk mengubah tim ini", { status: 403 })
     }
 
-    const updatedTeam = await db.team.update({
+    const updatedTeam = await prisma.team.update({
       where: {
         id: params.teamId,
       },
@@ -130,13 +141,29 @@ export async function PATCH(
       },
     })
 
-    return NextResponse.json(updatedTeam)
+    // Format response
+    const formattedTeam = {
+      id: updatedTeam.id,
+      name: updatedTeam.name,
+      description: updatedTeam.description,
+      members: updatedTeam.members.map((member) => ({
+        id: member.id,
+        name: member.user.name,
+        email: member.user.email,
+        avatar: member.user.avatar,
+        role: member.role,
+      })),
+      userRole: "OWNER",
+    }
+
+    return NextResponse.json(formattedTeam)
   } catch (error) {
     if (error instanceof z.ZodError) {
       return new NextResponse(JSON.stringify(error.errors), { status: 422 })
     }
 
-    return new NextResponse("Internal Error", { status: 500 })
+    console.error("Error updating team:", error)
+    return new NextResponse("Terjadi kesalahan saat memperbarui tim", { status: 500 })
   }
 }
 
@@ -151,7 +178,7 @@ export async function DELETE(
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const team = await db.team.findUnique({
+    const team = await prisma.team.findUnique({
       where: {
         id: params.teamId,
         members: {
@@ -167,7 +194,7 @@ export async function DELETE(
       return new NextResponse("Not Found", { status: 404 })
     }
 
-    await db.team.delete({
+    await prisma.team.delete({
       where: {
         id: params.teamId,
       },

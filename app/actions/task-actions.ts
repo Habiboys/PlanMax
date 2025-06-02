@@ -1,11 +1,10 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
-import { getServerSession } from "next-auth"
-import { z } from "zod"
-import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
-import { Task, Prisma } from "@prisma/client"
+import { prisma } from "@/lib/prisma"
+import { getServerSession } from "next-auth"
+import { revalidatePath } from "next/cache"
+import { z } from "zod"
 
 // Schema for task creation/update
 const taskSchema = z.object({
@@ -14,11 +13,13 @@ const taskSchema = z.object({
   startDate: z.string(),
   endDate: z.string(),
   status: z.string().default("Not Started"),
-  priority: z.string().default("Medium"),
-  type: z.string().default("Other"),
+  priority: z.enum(["High", "Medium", "Low"]).default("Medium"),
+  type: z.enum(["Development", "Testing", "Documentation", "Research", "Meeting", "Other"]).default("Development"),
   estimatedHours: z.number().optional().nullable(),
   assigneeId: z.number().optional().nullable(),
   dependencies: z.array(z.number()).optional(),
+  team_size: z.enum(["Small", "Medium", "Large"]).optional(),
+  task_type: z.enum(["Development", "Testing", "Documentation", "Research", "Meeting", "Other"]).optional(),
 })
 
 // Schema for task update
@@ -35,43 +36,91 @@ const taskUpdateSchema = z.object({
 
 type TaskUpdateInput = z.infer<typeof taskUpdateSchema>
 
+interface TaskWithRelations {
+  id: number;
+  projectId: number;
+  name: string;
+  description: string | null;
+  startDate: Date;
+  endDate: Date;
+  status: string;
+  priority: string;
+  type: string;
+  progress: number;
+  estimatedHours: number | null;
+  assigneeId: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+  assignee: { name: string } | null;
+  dependsOn: Array<{ dependsOnTaskId: number }>;
+}
+
 // Create a new task
-export async function createTask(projectId: number, formData: FormData) {
+export async function createTask(projectId: number, data: {
+  name: string
+  description?: string
+  startDate: Date
+  endDate: Date
+  status?: string
+  priority?: string
+  type?: string
+  estimatedHours?: number
+  assigneeId?: string | number
+  dependencies?: number[]
+  team_size?: 'Small' | 'Medium' | 'Large'
+  task_type?: string
+}) {
   const session = await getServerSession(authOptions)
 
   if (!session?.user?.id) {
     throw new Error("You must be logged in to create a task")
   }
 
-  // Parse dependencies from form data
-  const dependenciesStr = formData.get("dependencies") as string
-  const dependencies = dependenciesStr ? JSON.parse(dependenciesStr) : []
-
   // Parse assignee ID
-  const assigneeIdStr = formData.get("assigneeId") as string
   let assigneeId: number | null = null
-  if (assigneeIdStr && assigneeIdStr !== "unassigned") {
-    assigneeId = Number.parseInt(assigneeIdStr)
+  if (data.assigneeId && data.assigneeId !== "unassigned") {
+    assigneeId = typeof data.assigneeId === 'string' ? 
+      Number.parseInt(data.assigneeId) : 
+      data.assigneeId
+    
+    // Validasi hasil parsing
+    if (isNaN(assigneeId)) {
+      assigneeId = null
+    }
   }
 
   // Parse estimated hours
-  const estimatedHoursStr = formData.get("estimatedHours") as string
   let estimatedHours: number | null = null
-  if (estimatedHoursStr) {
-    estimatedHours = Number.parseFloat(estimatedHoursStr)
+  if (data.estimatedHours) {
+    estimatedHours = Number(data.estimatedHours)
+    if (isNaN(estimatedHours)) {
+      estimatedHours = null
+    }
   }
 
+  // Konversi date ke string ISO
+  const startDateStr = data.startDate instanceof Date ? 
+    data.startDate.toISOString() : 
+    new Date(data.startDate).toISOString()
+
+  const endDateStr = data.endDate instanceof Date ? 
+    data.endDate.toISOString() : 
+    new Date(data.endDate).toISOString()
+
+  // Pastikan semua properti wajib tersedia dengan nilai default jika tidak ada
   const validatedFields = taskSchema.parse({
-    name: formData.get("name"),
-    description: formData.get("description"),
-    startDate: formData.get("startDate"),
-    endDate: formData.get("endDate"),
-    status: formData.get("status") || "Not Started",
-    priority: formData.get("priority") || "Medium",
-    type: formData.get("type") || "Other",
+    name: data.name,
+    description: data.description,
+    startDate: startDateStr,
+    endDate: endDateStr,
+    status: data.status || "Not Started",
+    priority: data.priority || "Medium",
+    type: data.type || "Development",
     estimatedHours,
     assigneeId,
-    dependencies,
+    dependencies: data.dependencies || [],
+    team_size: data.team_size || "Medium",
+    task_type: data.task_type || "Development",
   })
 
   try {
@@ -81,10 +130,35 @@ export async function createTask(projectId: number, formData: FormData) {
         projectId: projectId,
         userId: Number.parseInt(session.user.id),
       },
+      include: {
+        project: {
+          include: {
+            members: true
+          }
+        }
+      }
     })
 
     if (!projectMember) {
       throw new Error("You don't have permission to create tasks in this project")
+    }
+
+    // Hitung team_size berdasarkan jumlah anggota tim
+    const memberCount = projectMember.project?.members?.length || 0
+    const teamSize = memberCount <= 3 ? 'Small' : memberCount <= 6 ? 'Medium' : 'Large'
+
+    // Siapkan data untuk ML API
+    const mlTaskData = {
+      status: validatedFields.status,
+      priority: validatedFields.priority,
+      team_size: data.team_size || teamSize,
+      task_type: data.task_type || validatedFields.type,
+      estimated_hours: validatedFields.estimatedHours,
+      title: validatedFields.name,
+      description: validatedFields.description || "",
+      word_count: validatedFields.description ? validatedFields.description.trim().split(/\s+/).length : 0,
+      dependency_count: (validatedFields.dependencies || []).length,
+      startDate: startDateStr
     }
 
     // Create the task
@@ -499,8 +573,8 @@ async function updateProjectProgress(projectId: number) {
 
     // Calculate project progress
     const totalTasks = tasks.length
-    const completedTasks = tasks.filter((task) => task.status === "Completed").length
-    const inProgressTasks = tasks.filter((task) => task.status === "In Progress").length
+    const completedTasks = tasks.filter((task: TaskWithRelations) => task.status === "Completed").length
+    const inProgressTasks = tasks.filter((task: TaskWithRelations) => task.status === "In Progress").length
     const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
 
     // Ambil info project untuk melihat progress saat ini
@@ -590,7 +664,7 @@ export async function getProjectTasks(projectId: number) {
     })
 
     return {
-      tasks: tasks.map((task) => ({
+      tasks: tasks.map((task: TaskWithRelations) => ({
         id: task.id,
         name: task.name,
         description: task.description || "",
@@ -600,7 +674,7 @@ export async function getProjectTasks(projectId: number) {
         status: task.status,
         assignee: task.assignee ? task.assignee.name : null,
         assigneeId: task.assigneeId,
-        dependencies: task.dependsOn.map((dep) => dep.dependsOnTaskId),
+        dependencies: task.dependsOn.map((dep: { dependsOnTaskId: number }) => dep.dependsOnTaskId),
       })),
     }
   } catch (error) {

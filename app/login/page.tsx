@@ -1,25 +1,23 @@
 "use client";
 
-import type React from "react";
-
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
-import { Calendar } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { Calendar } from "lucide-react";
+import { signIn } from "next-auth/react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import type React from "react";
+import { useState } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -51,27 +49,25 @@ export default function LoginPage() {
 
       if (result?.error) {
         toast({
-          title: "Authentication Error",
-          description: "Invalid email or password. Please try again.",
+          title: "Login Gagal",
+          description: "Email atau password tidak valid. Silakan coba lagi.",
           variant: "destructive",
         });
       } else {
-        // Gunakan router.push dan router.refresh untuk memastikan redirect berjalan dengan benar
         toast({
           title: "Login Berhasil",
           description: "Anda akan dialihkan ke dashboard.",
         });
 
-        // Tunggu sebentar untuk memastikan toast muncul dan sesi diperbarui
         setTimeout(() => {
           router.push(callbackUrl);
-          router.refresh(); // Refresh untuk memastikan state sesi diperbarui
+          router.refresh();
         }, 1000);
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: "An unexpected error occurred. Please try again.",
+        description: "Terjadi kesalahan. Silakan coba lagi.",
         variant: "destructive",
       });
     } finally {
@@ -80,28 +76,29 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <Card className="mx-auto max-w-sm">
-        <CardHeader className="space-y-1">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5 p-4">
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader className="space-y-3 text-center">
           <div className="flex items-center justify-center gap-2">
-            <Calendar className="h-6 w-6 text-primary" />
-            <CardTitle className="text-2xl font-bold">
-              Smart Project Planner
+            <Calendar className="h-8 w-8 text-primary" />
+            <CardTitle className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/80">
+              PlanMax
             </CardTitle>
           </div>
-          <CardDescription>
-            Enter your email and password to login to your account
+          <CardDescription className="text-base">
+            Masuk ke akun Anda untuk melanjutkan
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-sm font-medium">Email</Label>
               <Input
                 id="email"
                 name="email"
                 type="email"
-                placeholder="m@example.com"
+                placeholder="nama@email.com"
+                className="h-11"
                 required
                 value={formData.email}
                 onChange={handleChange}
@@ -110,18 +107,19 @@ export default function LoginPage() {
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-sm font-medium">Password</Label>
                 <Link
                   href="/forgot-password"
-                  className="text-sm text-primary underline-offset-4 hover:underline"
+                  className="text-sm text-primary hover:text-primary/80 transition-colors"
                 >
-                  Forgot password?
+                  Lupa password?
                 </Link>
               </div>
               <Input
                 id="password"
                 name="password"
                 type="password"
+                className="h-11"
                 required
                 value={formData.password}
                 onChange={handleChange}
@@ -129,17 +127,21 @@ export default function LoginPage() {
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col">
-            <Button className="w-full" type="submit" disabled={isLoading}>
-              {isLoading ? "Logging in..." : "Login"}
+          <CardFooter className="flex flex-col space-y-4">
+            <Button 
+              className="w-full h-11 text-base font-medium" 
+              type="submit" 
+              disabled={isLoading}
+            >
+              {isLoading ? "Sedang Masuk..." : "Masuk"}
             </Button>
-            <div className="mt-4 text-center text-sm">
-              Don&apos;t have an account?{" "}
+            <div className="text-center text-sm">
+              Belum punya akun?{" "}
               <Link
                 href="/register"
-                className="text-primary underline-offset-4 hover:underline"
+                className="text-primary hover:text-primary/80 transition-colors font-medium"
               >
-                Sign up
+                Daftar sekarang
               </Link>
             </div>
           </CardFooter>

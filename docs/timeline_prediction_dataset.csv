@@ -1,0 +1,11 @@
+status,priority,team_size,task_type,estimated_hours,word_count,dependency_count,actual_days
+Completed,High,Small,Development,16,45,2,7
+Completed,Medium,Small,Development,8,30,0,3
+Completed,High,Medium,Design,12,25,1,4
+Completed,Low,Small,Documentation,6,100,0,2
+Completed,Medium,Large,Development,40,60,3,12
+Completed,High,Small,Testing,8,20,1,2
+Completed,Medium,Small,Meeting,2,15,0,1
+Completed,High,Medium,Development,24,50,2,8
+Completed,Low,Small,Design,16,35,1,5
+Completed,Medium,Small,Documentation,4,80,0,3 
