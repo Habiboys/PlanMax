@@ -120,9 +120,9 @@ class BlockerDetectionRequest(BaseModel):
 class BlockerDetectionResponse(BaseModel):
     is_blocker: bool
     confidence: float
-    flagged_phrases: list
+    flagged_phrases: List[str]
     recommendation: str
-    probabilities: dict
+    probabilities: Dict[str, float]
 
 
 @app.get("/")

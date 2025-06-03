@@ -33,6 +33,17 @@ class BlockerDetector:
             
             print("\nModel type:", type(self.model))
             print("Model steps:", self.model.named_steps if hasattr(self.model, 'named_steps') else "No steps found")
+            
+            # Verifikasi model
+            if not hasattr(self.model, 'predict_proba'):
+                raise ValueError("Model tidak memiliki method predict_proba")
+            
+            # Verifikasi vectorizer
+            if hasattr(self.model, 'named_steps') and 'tfidf' in self.model.named_steps:
+                vectorizer = self.model.named_steps['tfidf']
+                if not hasattr(vectorizer, 'vocabulary_'):
+                    raise ValueError("TF-IDF vectorizer belum di-fit")
+            
             print("=== Models Loaded Successfully! ===\n")
             
         except Exception as e:
@@ -44,15 +55,35 @@ class BlockerDetector:
             raise
 
     def detect_blockers(self, text, threshold=0.5):
-        if not text:
-            return {
-                "is_blocker": False,
-                "confidence": 0.0,
-                "flagged_phrases": [],
-                "recommendation": ""
+        """Mendeteksi blocker dari teks."""
+        # Default response untuk error case
+        default_response = {
+            "is_blocker": False,
+            "confidence": 0.0,
+            "flagged_phrases": [],
+            "recommendation": "Error dalam analisis",
+            "probabilities": {
+                "not_blocker": 1.0,
+                "blocker": 0.0
             }
+        }
+
+        if not text:
+            return default_response
 
         try:
+            # Verifikasi model sebelum prediksi
+            if not hasattr(self.model, 'predict_proba'):
+                print("Error: Model tidak memiliki method predict_proba")
+                return default_response
+
+            # Verifikasi vectorizer
+            if hasattr(self.model, 'named_steps') and 'tfidf' in self.model.named_steps:
+                vectorizer = self.model.named_steps['tfidf']
+                if not hasattr(vectorizer, 'vocabulary_'):
+                    print("Error: TF-IDF vectorizer belum di-fit")
+                    return default_response
+
             # Langsung gunakan teks asli, karena model sudah include preprocessor
             probabilities = self.model.predict_proba([text])[0]
             blocker_probability = float(probabilities[1])  # Probabilitas untuk kelas blocker
@@ -87,12 +118,8 @@ class BlockerDetector:
 
         except Exception as e:
             print(f"Error dalam prediksi: {str(e)}")
-            return {
-                "is_blocker": False,
-                "confidence": 0.0,
-                "flagged_phrases": [],
-                "recommendation": "Error dalam analisis"
-            }
+            print(traceback.format_exc())
+            return default_response
 
     def _generate_recommendation(self, confidence, is_blocker):
         """Generate recommendation based on model prediction."""
@@ -121,3 +148,4 @@ if __name__ == "__main__":
     print(f"Confidence: {result['confidence']:.2f}")
     print(f"Flagged Phrases: {result['flagged_phrases']}")
     print(f"Recommendation: {result['recommendation']}")
+    print(f"Probabilities: {result['probabilities']}")
