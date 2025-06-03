@@ -13,7 +13,7 @@ import traceback
 from blocker_detector import BlockerDetector
 from timeline_predictor import TimelinePredictor
 
-# Initialize FastAPI app
+
 app = FastAPI(
     title="Smart Project Planner ML API",
     description="API untuk mendeteksi potensi blocker dan memprediksi timeline task",

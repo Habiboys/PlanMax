@@ -35,11 +35,6 @@ ENV/
 *.swp
 *.swo
 
-# Model files dan dataset besar
-*.pkl
-*.h5
-*.model
-*.csv
 
 # Logs
 *.log
