@@ -13,6 +13,30 @@ import traceback
 from blocker_detector import BlockerDetector
 from timeline_predictor import TimelinePredictor
 
+# Fungsi untuk mengecek keberadaan file
+def check_model_files():
+    model_files = [
+        'blocker_model_only.pkl',
+        'blocker_classifier_model.pkl',
+        'timeline_predictor_model.pkl',
+        'timeline_preprocessor.pkl'
+    ]
+    
+    print("\n=== Checking Model Files ===")
+    for file in model_files:
+        exists = os.path.exists(file)
+        size = os.path.getsize(file) if exists else 0
+        print(f"File: {file}")
+        print(f"Exists: {exists}")
+        print(f"Size: {size} bytes")
+        print("-------------------------")
+    print("=== Check Complete ===\n")
+
+# Konfigurasi CORS yang diizinkan
+ALLOWED_ORIGINS = [
+    "https://next-968082275546.asia-southeast2.run.app",  # Frontend production
+    "http://localhost:3000",  # Frontend development
+]
 
 app = FastAPI(
     title="Smart Project Planner ML API",
@@ -23,15 +47,30 @@ app = FastAPI(
 # CORS settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust in production
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept"],
+    expose_headers=["Content-Type"]
 )
 
+# Print working directory dan list files
+print(f"\nCurrent working directory: {os.getcwd()}")
+print("\nFiles in directory:")
+print(os.listdir())
+
+# Check model files
+check_model_files()
+
 # Initialize models
-detector = BlockerDetector()
-predictor = TimelinePredictor()
+try:
+    detector = BlockerDetector()
+    predictor = TimelinePredictor()
+    print("✅ Models initialized successfully!")
+except Exception as e:
+    print(f"❌ Error initializing models: {str(e)}")
+    print(f"Traceback: {traceback.format_exc()}")
+    raise
 
 # Pydantic models untuk request/response
 class TaskData(BaseModel):

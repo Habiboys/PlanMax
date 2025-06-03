@@ -4,29 +4,43 @@ import numpy as np
 import joblib
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
+import traceback
 
 # Download NLTK resources
 try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords')
+    print("Downloading NLTK resources...")
+    nltk.download('punkt', quiet=True)
+    nltk.download('stopwords', quiet=True)
+    print("✅ NLTK resources downloaded successfully!")
+except Exception as e:
+    print(f"❌ Error downloading NLTK resources: {str(e)}")
+    print(traceback.format_exc())
 
 class BlockerDetector:
     def __init__(self):
         """Inisialisasi detector blocker dengan model ML."""
         try:
+            print("\n=== Loading Blocker Detection Models ===")
+            print("Loading blocker_model_only.pkl...")
             # Load model ML yang sudah dilatih
             self.model = joblib.load('blocker_model_only.pkl')
+            print("✅ blocker_model_only.pkl loaded successfully!")
+            
+            print("\nLoading blocker_classifier_model.pkl...")
             # Load metadata model (opsional, untuk informasi tambahan)
             self.model_data = joblib.load('blocker_classifier_model.pkl')
-            print("✅ Model  ML blocker berhasil dimuat!")
+            print("✅ blocker_classifier_model.pkl loaded successfully!")
+            
+            print("\nModel type:", type(self.model))
+            print("Model steps:", self.model.named_steps if hasattr(self.model, 'named_steps') else "No steps found")
+            print("=== Models Loaded Successfully! ===\n")
+            
         except Exception as e:
-            print(f"❌ Error loading model: {str(e)}")
+            print("\n❌ Error loading model:")
+            print(f"Error type: {type(e).__name__}")
+            print(f"Error message: {str(e)}")
+            print("\nFull traceback:")
+            print(traceback.format_exc())
             raise
 
     def detect_blockers(self, text, threshold=0.5):
